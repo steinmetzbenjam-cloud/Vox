@@ -62,6 +62,68 @@ bibliques → jw.org** fait passer tous les liens par le site. Sur chaque bloc
 - L'**étoile** remonte un thème en haut de la liste.
 - L'accueil propose les trois derniers thèmes consultés.
 
+## Échanger un thème
+
+Sur l'écran de lecture, le bouton **↗** propose deux chemins :
+
+- **Envoyer le fichier** — un `.json` qui contient le thème *et ses photos*. Sur
+  téléphone, la feuille de partage native s'ouvre : AirDrop, message, mail.
+  Ailleurs, le fichier est simplement téléchargé.
+- **Copier un lien** — le thème est compressé et logé dans l'adresse elle-même.
+  Un thème courant tient en un millier de caractères, ce qui passe partout.
+  En revanche le lien **laisse les photos de côté** : elles sont trop lourdes.
+
+Celui qui reçoit touche le lien, ou passe par **Importer un thème** en bas d'un
+domaine, puis choisit où le ranger.
+
+**L'import ajoute, il ne remplace jamais.** Chaque thème reçu arrive avec un
+identifiant neuf : réimporter deux fois le même lien donne deux exemplaires,
+jamais un écrasement. À ne pas confondre avec `Réglages → Restaurer une
+sauvegarde`, qui remplace tout et sert à changer d'appareil.
+
+### Écrire un paquet à la main
+
+Un paquet est un JSON lisible. On peut donc en préparer un sans passer par
+l'application — pour se constituer une bibliothèque, ou en préparer pour
+quelqu'un d'autre :
+
+```json
+{
+  "application": "vox",
+  "type": "partage",
+  "version": 1,
+  "titre": "Trois thèmes sur l'espérance",
+  "themes": [
+    {
+      "titre": "Que devient-on à la mort ?",
+      "soustitre": "Un état, pas un lieu",
+      "situations": ["deuil"],
+      "blocs": [
+        { "type": "question", "texte": "« Est-ce qu'il me voit, là où il est ? »" },
+        { "type": "texte",    "texte": "Montrer ce que la Bible dit réellement soulage." },
+        { "type": "ecriture", "reference": "Ecclésiaste 9:5", "idee": "Les morts ne savent rien" },
+        { "type": "note",     "texte": "Laisser un silence ici." },
+        { "type": "image",    "reference": "p1", "legende": "Photo du texte" }
+      ]
+    }
+  ],
+  "images": { "p1": "data:image/jpeg;base64,…" }
+}
+```
+
+Règles :
+
+- Les cinq types de blocs sont `question`, `texte`, `ecriture`, `image`, `note`.
+- `question`, `texte` et `note` n'ont qu'un champ `texte`. Les références
+  écrites dedans deviennent cliquables toutes seules.
+- `ecriture` prend une `reference` en clair et une `idee` facultative.
+- `image` pointe vers une clé de l'objet `images` par son champ `reference`.
+  Un bloc image dont la photo manque est simplement ignoré à l'import.
+- `images` peut être omis. Les identifiants, eux, ne doivent **pas** figurer :
+  l'application les attribue elle-même.
+
+Le fichier s'importe tel quel par **Importer un thème → Choisir un fichier**.
+
 ## Vos données
 
 Tout est enregistré dans le navigateur de l'appareil (IndexedDB), photos
@@ -120,6 +182,7 @@ css/app.css             toute la mise en forme (clair + sombre)
 js/bible.js             les 66 livres, analyse des références, liens JW Library
 js/store.js             IndexedDB : domaines, thèmes, photos, réglages, export
 js/seed.js              les thèmes de départ (posés au premier lancement)
+js/partage.js           paquets de thèmes : fabrication, lien compressé, import
 js/ui.js                éléments, icônes, modales, notifications
 js/vues.js              les écrans
 js/app.js               état, photos, routeur, démarrage

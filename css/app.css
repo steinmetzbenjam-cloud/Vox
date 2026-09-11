@@ -658,6 +658,34 @@ h1, h2, h3 { font-weight: 600; letter-spacing: -.01em; }
   text-align: center;
 }
 
+/* ---------------------------------------------------------- import --- */
+
+.apercu {
+  margin: 4px 0 0;
+  padding: 0 0 0 20px;
+  list-style: none;
+}
+
+.apercu__ligne {
+  position: relative;
+  padding: 7px 0;
+  font-family: var(--serif);
+  font-size: 1rem;
+  border-bottom: 1px solid var(--bord);
+}
+
+.apercu__ligne:last-child { border-bottom: 0; }
+
+.apercu__ligne::before {
+  content: '';
+  position: absolute;
+  left: -14px;
+  top: 16px;
+  width: 5px; height: 5px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
 /* --------------------------------------------------------------- vides --- */
 
 .vide {

@@ -71,6 +71,9 @@ const Routeur = (() => {
   const ECRANS = [
     { motif: /^#?\/?$/,                     rendre: (c) => Vues.accueil(c) },
     { motif: /^#\/recherche$/,              rendre: (c) => Vues.recherche(c) },
+    { motif: /^#\/i\/([A-Za-z0-9_-]+)$/,     rendre: (c, m) => Vues.importer(c, null, m[1]) },
+    { motif: /^#\/importer$/,               rendre: (c) => Vues.importer(c, null, null) },
+    { motif: /^#\/importer\/([^/]+)$/,      rendre: (c, m) => Vues.importer(c, m[1], null) },
     { motif: /^#\/reglages$/,               rendre: (c) => Vues.reglages(c) },
     { motif: /^#\/d\/([^/]+)$/,             rendre: (c, m) => Vues.domaine(c, m[1]) },
     { motif: /^#\/t\/([^/]+)\/modifier$/,   rendre: (c, m) => Vues.editeur(c, m[1]) },
