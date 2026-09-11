@@ -225,5 +225,24 @@ const Store = (() => {
     );
   }
 
-  return { ouvrir, domaines, themes, images, reglages, exporter, importer, vider, identifiant, maintenant };
+  /**
+   * Où en est-on d'une sauvegarde ?
+   * Ne compte que ce que l'utilisateur a réellement produit : les thèmes de
+   * départ, tant qu'on n'y a pas touché, ne justifient pas un rappel.
+   */
+  function etatSauvegarde() {
+    return Promise.all([reglages.obtenir('derniereSauvegarde', null), themes.tous()])
+      .then(([derniere, tous]) => {
+        const repere = derniere ? Date.parse(derniere) : 0;
+        // `sien` est posé dès qu'un thème sort de l'éditeur, est créé ou est
+        // importé. Le contenu de départ, tant qu'on n'y touche pas, ne compte
+        // pas : il se retrouve à l'identique sur n'importe quelle installation.
+        const siens = tous.filter(t => t.sien);
+        const enRetard = siens.filter(t => (Date.parse(t.modifieLe || 0) || 0) > repere);
+        return { derniere, enRetard: enRetard.length, total: siens.length };
+      });
+  }
+
+  return { ouvrir, domaines, themes, images, reglages, exporter, importer, vider,
+           etatSauvegarde, identifiant, maintenant };
 })();

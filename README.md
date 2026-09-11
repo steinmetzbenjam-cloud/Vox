@@ -130,9 +130,25 @@ Tout est enregistré dans le navigateur de l'appareil (IndexedDB), photos
 comprises. Rien n'est envoyé nulle part.
 
 Conséquence : **si vous effacez les données du navigateur, tout disparaît.**
-`Réglages → Exporter une sauvegarde` produit un fichier `.json` unique qui
-contient les thèmes *et* les photos, et qui se restaure sur n'importe quel
-appareil. C'est aussi la façon de passer d'un téléphone à un autre.
+
+`Réglages → Sauvegarder…` produit un fichier `.json` unique contenant les thèmes
+*et* les photos. Sur téléphone, la feuille de partage native s'ouvre : choisissez
+**Dropbox**, iCloud Drive, Fichiers, Mail — la destination que vous voulez.
+Gardez le même endroit à chaque fois, le nom du fichier porte la date.
+
+Pour restaurer : `Réglages → Restaurer une sauvegarde`. Le sélecteur de fichiers
+d'iOS sait aller chercher dans Dropbox et iCloud Drive si ces applications sont
+installées. C'est aussi ainsi qu'on passe d'un téléphone à un autre.
+
+Il n'y a **pas** de synchronisation automatique, et c'est délibéré : un OAuth
+Dropbox suppose une application développeur, une clé, et des jetons qui expirent.
+Pour une sauvegarde, échouer en silence est le pire défaut possible.
+
+À la place, l'application compte ce qui vous appartient. Un thème est marqué
+`sien` dès qu'il sort de l'éditeur, qu'il est créé ou qu'il est importé — le
+contenu de départ, lui, ne compte pas tant qu'on n'y a pas touché. Si des thèmes
+marqués ont changé depuis la dernière sauvegarde, l'accueil affiche un rappel,
+que l'on peut repousser d'une semaine.
 
 ---
 

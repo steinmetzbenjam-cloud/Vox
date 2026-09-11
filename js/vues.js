@@ -7,6 +7,8 @@ const Vues = (() => {
   const el = UI.el;
   const icone = UI.icone;
 
+  const JOUR = 24 * 60 * 60 * 1000;
+
   /* =====================================================================
    *  Fragments partagés
    * ===================================================================== */
@@ -86,7 +88,12 @@ const Vues = (() => {
    * ===================================================================== */
 
   function accueil(conteneur) {
-    return Promise.all([Store.domaines.tous(), Store.themes.tous()]).then(([domaines, themes]) => {
+    return Promise.all([
+      Store.domaines.tous(),
+      Store.themes.tous(),
+      Store.etatSauvegarde(),
+      Store.reglages.obtenir('rappelReporteLe', null)
+    ]).then(([domaines, themes, sauvegarde, reporte]) => {
       const parDomaine = new Map();
       for (const t of themes) {
         parDomaine.set(t.domaineId, (parDomaine.get(t.domaineId) || 0) + 1);
@@ -102,6 +109,33 @@ const Vues = (() => {
           boutonAction('reglages', 'Réglages', () => { location.hash = '#/reglages'; })
         ])
       ]));
+
+      // Rappel discret : seulement s'il y a vraiment quelque chose à perdre,
+      // et jamais pendant la semaine qui suit un « Plus tard ».
+      const enSommeil = reporte && (Date.now() - Date.parse(reporte)) < 7 * JOUR;
+      if (sauvegarde.enRetard && !enSommeil) {
+        const rappel = el('div.rappel', null, [
+          el('div.rappel__texte', null, [
+            el('strong', { texte: sauvegarde.derniere ? 'À sauvegarder' : 'Rien n’est sauvegardé' }),
+            el('span', {
+              texte: sauvegarde.enRetard + (sauvegarde.enRetard > 1 ? ' thèmes n’existent' : ' thème n’existe')
+                + ' que sur cet appareil.'
+            })
+          ]),
+          el('div.rappel__actions', null, [
+            el('button.bouton.bouton--plein', {
+              type: 'button', texte: 'Sauvegarder',
+              onclick: () => { location.hash = '#/reglages'; }
+            }),
+            el('button.bouton.bouton--discret', {
+              type: 'button', texte: 'Plus tard',
+              onclick: () => Store.reglages.definir('rappelReporteLe', Store.maintenant())
+                .then(() => rappel.remove())
+            })
+          ])
+        ]);
+        conteneur.appendChild(rappel);
+      }
 
       const recents = themes
         .filter(t => t.consulteLe)
@@ -269,7 +303,8 @@ const Vues = (() => {
             domaineId: id,
             titre: 'Nouveau thème',
             ordre: Date.now(),
-            blocs: []
+            blocs: [],
+            sien: true
           }).then(t => { location.hash = '#/t/' + t.id + '/modifier'; })
         }, [icone('plus'), 'Nouveau thème']));
 
@@ -729,6 +764,7 @@ const Vues = (() => {
       // Enregistrement continu : on ne peut pas perdre une préparation.
       function enregistrer() {
         clearTimeout(minuterie);
+        brouillon.sien = true; // passé par l'éditeur : c'est le travail de l'utilisateur
         temoin.textContent = '…';
         minuterie = setTimeout(() => {
           Store.themes.enregistrer(brouillon).then(() => {
@@ -1049,6 +1085,26 @@ const Vues = (() => {
    *  Réglages
    * ===================================================================== */
 
+  function ilYA(iso) {
+    const jours = Math.floor((Date.now() - Date.parse(iso)) / JOUR);
+    if (jours <= 0) return 'aujourd’hui';
+    if (jours === 1) return 'hier';
+    if (jours < 31) return 'il y a ' + jours + ' jours';
+    const mois = Math.round(jours / 30);
+    return 'il y a ' + mois + (mois > 1 ? ' mois' : ' mois');
+  }
+
+  function decrireSauvegarde(etat) {
+    if (!etat.derniere) {
+      return etat.enRetard
+        ? 'Jamais sauvegardé — ' + etat.enRetard + (etat.enRetard > 1 ? ' thèmes vous appartiennent' : ' thème vous appartient') + ' et n’existent que sur cet appareil.'
+        : 'Jamais sauvegardé.';
+    }
+    const quand = 'Dernière sauvegarde ' + ilYA(etat.derniere) + '.';
+    if (!etat.enRetard) return quand + ' Rien de nouveau depuis.';
+    return quand + ' ' + etat.enRetard + (etat.enRetard > 1 ? ' thèmes modifiés' : ' thème modifié') + ' depuis.';
+  }
+
   function reglages(conteneur) {
     conteneur.appendChild(entete({
       retour: () => { location.hash = '#/'; },
@@ -1096,25 +1152,80 @@ const Vues = (() => {
 
     /* — sauvegarde — */
     conteneur.appendChild(el('h2.section', { texte: 'Sauvegarde' }));
+
+    const etatLigne = el('p.aide', { texte: 'Vérification…' });
+    conteneur.appendChild(etatLigne);
+    Store.etatSauvegarde().then(etat => {
+      etatLigne.textContent = decrireSauvegarde(etat);
+      etatLigne.className = 'aide' + (etat.enRetard ? ' aide--alerte' : '');
+    });
+
     conteneur.appendChild(el('p.aide', {
-      texte: 'Vos préparations ne sont enregistrées que sur cet appareil. Exportez-les de temps en temps : le fichier obtenu se restaure sur n’importe quel téléphone.'
+      texte: 'Vos préparations ne vivent que sur cet appareil. Le fichier exporté contient tout, photos comprises, et se restaure sur n’importe quel téléphone.'
     }));
+
+    // Safari n'autorise navigator.share() que dans la foulée immédiate d'une
+    // pression. On prépare donc le fichier dès l'ouverture de cet écran, pour
+    // que le bouton n'ait plus rien à attendre au moment du geste.
+    let fichierPret = null;
+    const preparation = Store.exporter().then(donnees => {
+      const contenu = JSON.stringify(donnees, null, 2);
+      const nom = 'vox-' + new Date().toISOString().slice(0, 10) + '.json';
+      fichierPret = { contenu, nom, fichier: new File([contenu], nom, { type: 'application/json' }) };
+      return fichierPret;
+    }).catch(() => null);
+
+    function marquerFait() {
+      return Store.reglages.definir('derniereSauvegarde', Store.maintenant())
+        .then(() => Store.etatSauvegarde())
+        .then(etat => {
+          etatLigne.textContent = decrireSauvegarde(etat);
+          etatLigne.className = 'aide';
+        });
+    }
+
+    function telecharger(pret) {
+      const lien = el('a', {
+        href: URL.createObjectURL(new Blob([pret.contenu], { type: 'application/json' })),
+        download: pret.nom
+      });
+      document.body.appendChild(lien);
+      lien.click();
+      document.body.removeChild(lien);
+      setTimeout(() => URL.revokeObjectURL(lien.href), 4000);
+      return marquerFait().then(() => UI.annoncer('Sauvegarde enregistrée'));
+    }
 
     conteneur.appendChild(el('button.bouton.bouton--plein.bouton--large', {
       type: 'button',
-      onclick: () => Store.exporter().then(donnees => {
-        const blob = new Blob([JSON.stringify(donnees, null, 2)], { type: 'application/json' });
-        const lien = el('a', {
-          href: URL.createObjectURL(blob),
-          download: 'vox-' + new Date().toISOString().slice(0, 10) + '.json'
-        });
-        document.body.appendChild(lien);
-        lien.click();
-        document.body.removeChild(lien);
-        setTimeout(() => URL.revokeObjectURL(lien.href), 4000);
-        UI.annoncer('Sauvegarde exportée');
-      })
-    }, [icone('telecharger'), 'Exporter une sauvegarde']));
+      onclick: () => {
+        const lancer = pret => {
+          if (!pret) {
+            UI.annoncer('Sauvegarde impossible à préparer', 'erreur');
+            return;
+          }
+          if (navigator.canShare && navigator.canShare({ files: [pret.fichier] })) {
+            navigator.share({ files: [pret.fichier], title: 'Sauvegarde Vox' })
+              .then(marquerFait)
+              .catch(erreur => {
+                // L'utilisateur a fermé la feuille : ce n'est pas un échec.
+                if (erreur && erreur.name === 'AbortError') return;
+                telecharger(pret);
+              });
+            return;
+          }
+          telecharger(pret);
+        };
+        // Prêt dans l'immense majorité des cas ; sinon on attend, quitte à
+        // retomber sur le téléchargement si le geste a expiré entre-temps.
+        if (fichierPret) lancer(fichierPret);
+        else preparation.then(lancer);
+      }
+    }, [icone('envoyer'), 'Sauvegarder…']));
+
+    conteneur.appendChild(el('p.aide', {
+      texte: 'Choisissez Dropbox, iCloud Drive, Fichiers, Mail — la destination que vous voulez. Gardez le même endroit à chaque fois.'
+    }));
 
     const choixFichier = el('input', { type: 'file', accept: 'application/json,.json', hidden: true });
     choixFichier.addEventListener('change', () => {
@@ -1140,6 +1251,10 @@ const Vues = (() => {
     conteneur.appendChild(el('button.bouton.bouton--discret.bouton--large', {
       type: 'button', onclick: () => choixFichier.click()
     }, [icone('televerser'), 'Restaurer une sauvegarde']));
+
+    conteneur.appendChild(el('p.aide', {
+      texte: 'Le sélecteur de fichiers d’iOS sait aller chercher dans Dropbox et iCloud Drive, si ces applications sont installées.'
+    }));
 
     conteneur.appendChild(el('p.colophon', {
       texte: 'Vox — préparer en silence ce qui sera dit à voix haute.'
