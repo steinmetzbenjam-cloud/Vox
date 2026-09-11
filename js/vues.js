@@ -272,7 +272,217 @@ const Vues = (() => {
             blocs: []
           }).then(t => { location.hash = '#/t/' + t.id + '/modifier'; })
         }, [icone('plus'), 'Nouveau thème']));
+
+        conteneur.appendChild(el('button.bouton.bouton--discret.bouton--large', {
+          type: 'button',
+          onclick: () => { location.hash = '#/importer/' + id; }
+        }, [icone('televerser'), 'Importer un thème']));
       });
+  }
+
+  /* =====================================================================
+   *  Partage et import
+   * ===================================================================== */
+
+  /** Feuille de partage : fichier complet, ou lien si la taille le permet. */
+  function partagerThemes(themes) {
+    const nomFichier = (themes.length === 1
+      ? themes[0].titre.replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-|-$/g, '').toLowerCase().slice(0, 40)
+      : 'themes') + '.vox.json';
+
+    const photos = Partage.comptePhotos(themes);
+
+    function envoyerFichier() {
+      Partage.fabriquer(themes, { avecPhotos: true }).then(paquet => {
+        const contenu = JSON.stringify(paquet, null, 2);
+        const fichier = new File([contenu], nomFichier, { type: 'application/json' });
+        // Sur téléphone, la feuille de partage native (AirDrop, messages, mail)
+        // est de loin le chemin le plus court ; ailleurs, un téléchargement.
+        if (navigator.canShare && navigator.canShare({ files: [fichier] })) {
+          navigator.share({ files: [fichier], title: paquet.titre })
+            .catch(() => {});
+          UI.fermerModale();
+          return;
+        }
+        const lien = el('a', {
+          href: URL.createObjectURL(new Blob([contenu], { type: 'application/json' })),
+          download: nomFichier
+        });
+        document.body.appendChild(lien);
+        lien.click();
+        document.body.removeChild(lien);
+        setTimeout(() => URL.revokeObjectURL(lien.href), 4000);
+        UI.fermerModale();
+        UI.annoncer('Fichier enregistré');
+      });
+    }
+
+    function copierLien() {
+      Partage.fabriquer(themes, { avecPhotos: false })
+        .then(Partage.encoder)
+        .then(code => {
+          const adresse = Partage.lienPour(code);
+          if (adresse.length > 8000) {
+            UI.annoncer('Trop long pour un lien — envoyez le fichier', 'erreur');
+            return;
+          }
+          const copie = navigator.clipboard && navigator.clipboard.writeText
+            ? navigator.clipboard.writeText(adresse)
+            : Promise.reject();
+          copie.then(() => {
+            UI.fermerModale();
+            UI.annoncer('Lien copié');
+          }).catch(() => {
+            // Presse-papiers refusé : on montre le lien pour une copie à la main.
+            UI.fermerModale();
+            const champ = el('textarea.champ.champ--zone', { rows: 4, readonly: true });
+            champ.value = adresse;
+            UI.ouvrirModale([
+              el('h2.modale__titre', { texte: 'Lien à envoyer' }),
+              el('p.modale__texte', { texte: 'Copiez ce lien et envoyez-le.' }),
+              champ,
+              el('div.modale__actions', null, [
+                el('button.bouton.bouton--plein', { type: 'button', texte: 'Fermer', onclick: UI.fermerModale })
+              ])
+            ]);
+            champ.select();
+          });
+        })
+        .catch(() => UI.annoncer('Lien impossible à fabriquer', 'erreur'));
+    }
+
+    UI.ouvrirModale([
+      el('h2.modale__titre', { texte: themes.length === 1 ? 'Partager ce thème' : 'Partager ces thèmes' }),
+      el('p.modale__texte', {
+        texte: 'La personne doit avoir Vox. L\u2019import s\u2019ajoute chez elle sans rien remplacer.'
+      }),
+      el('button.bouton.bouton--plein.bouton--large', { type: 'button', onclick: envoyerFichier },
+         [icone('envoyer'), 'Envoyer le fichier']),
+      el('p.aide', {
+        texte: photos
+          ? 'Le fichier contient les ' + photos + (photos > 1 ? ' photos.' : ' photo.')
+          : 'Le fichier contient tout le thème.'
+      }),
+      el('button.bouton.bouton--discret.bouton--large', { type: 'button', onclick: copierLien },
+         [icone('lien'), 'Copier un lien']),
+      el('p.aide', {
+        texte: photos
+          ? 'Le lien s\u2019ouvre d\u2019une seule touche, mais laisse les photos de côté.'
+          : 'Le lien s\u2019ouvre d\u2019une seule touche, dans un message ou un mail.'
+      })
+    ]);
+  }
+
+  /**
+   * Écran d'import. `code` vient d'un lien reçu ; sinon on propose le fichier
+   * ou le collage manuel.
+   */
+  function importer(conteneur, domaineVise, code) {
+    conteneur.appendChild(entete({
+      retour: () => { location.hash = domaineVise ? '#/d/' + domaineVise : '#/'; },
+      titre: 'Importer un thème'
+    }));
+
+    const zone = el('div.liste');
+    conteneur.appendChild(zone);
+
+    return Store.domaines.tous().then(domaines => {
+
+      /* Aperçu du paquet, puis choix du domaine d'accueil. */
+      function proposer(paquet) {
+        zone.innerHTML = '';
+        zone.appendChild(el('div.fiche', null, [
+          el('div.fiche__corps', null, [
+            el('span.fiche__titre', { texte: paquet.titre || 'Thème reçu' }),
+            el('span.fiche__meta', { texte: Partage.resumer(paquet) })
+          ])
+        ]));
+
+        // Pour un thème unique, la carte ci-dessus le nomme déjà.
+        if (paquet.themes.length > 1) {
+          zone.appendChild(el('ul.apercu', null, paquet.themes.map(t =>
+            el('li.apercu__ligne', { texte: t.titre }))));
+        }
+
+        if (!domaines.length) {
+          zone.appendChild(vide('Créez d\u2019abord un domaine pour y ranger ce thème.'));
+          return;
+        }
+
+        zone.appendChild(el('h2.section', { texte: 'Ranger dans' }));
+        let choisi = domaineVise && domaines.some(d => d.id === domaineVise)
+          ? domaineVise : domaines[0].id;
+
+        const choix = el('div.filtres');
+        for (const d of domaines) {
+          const bouton = el('button.filtre' + (d.id === choisi ? '.filtre--actif' : ''), {
+            type: 'button', texte: d.nom,
+            onclick: () => {
+              choisi = d.id;
+              choix.querySelectorAll('.filtre').forEach(b => b.classList.remove('filtre--actif'));
+              bouton.classList.add('filtre--actif');
+            }
+          });
+          choix.appendChild(bouton);
+        }
+        zone.appendChild(choix);
+
+        zone.appendChild(el('button.bouton.bouton--plein.bouton--large', {
+          type: 'button',
+          onclick: () => Partage.installer(paquet, choisi).then(poses => {
+            UI.annoncer(poses.length > 1 ? poses.length + ' thèmes importés' : 'Thème importé');
+            location.hash = poses.length === 1 ? '#/t/' + poses[0].id : '#/d/' + choisi;
+          }).catch(() => UI.annoncer('Import impossible', 'erreur'))
+        }, [icone('check'), paquet.themes.length > 1 ? 'Tout importer' : 'Importer']));
+      }
+
+      function echouer(erreur) {
+        zone.innerHTML = '';
+        zone.appendChild(vide(erreur.message || 'Import impossible.'));
+        offrirSources();
+      }
+
+      function offrirSources() {
+        const choixFichier = el('input', { type: 'file', accept: 'application/json,.json', hidden: true });
+        choixFichier.addEventListener('change', () => {
+          const fichier = choixFichier.files && choixFichier.files[0];
+          if (!fichier) return;
+          Partage.lireFichier(fichier).then(proposer).catch(echouer)
+            .then(() => { choixFichier.value = ''; });
+        });
+        zone.appendChild(choixFichier);
+
+        zone.appendChild(el('button.bouton.bouton--plein.bouton--large', {
+          type: 'button', onclick: () => choixFichier.click()
+        }, [icone('televerser'), 'Choisir un fichier']));
+
+        zone.appendChild(el('button.bouton.bouton--discret.bouton--large', {
+          type: 'button',
+          onclick: () => UI.demander('Coller un lien ou un code', '', {
+            multiligne: true,
+            repere: 'https://…/#/i/VOXZ…',
+            aide: 'Collez ici le lien reçu, ou le code seul.'
+          }).then(saisie => {
+            if (!saisie) return;
+            const trouve = saisie.match(/(VOX[ZP][A-Za-z0-9\-_]+)/);
+            if (!trouve) {
+              UI.annoncer('Aucun code Vox là-dedans', 'erreur');
+              return;
+            }
+            Partage.decoder(trouve[1]).then(proposer).catch(echouer);
+          })
+        }, [icone('lien'), 'Coller un lien']));
+
+        zone.appendChild(el('p.aide', {
+          texte: 'Un thème importé s\u2019ajoute : rien de ce que vous avez déjà n\u2019est remplacé.'
+        }));
+      }
+
+      if (code) {
+        return Partage.decoder(code).then(proposer).catch(echouer);
+      }
+      offrirSources();
+    });
   }
 
   function modifierDomaine(leDomaine) {
@@ -370,6 +580,7 @@ const Vues = (() => {
             Store.themes.enregistrer(leTheme).then(() => Routeur.rafraichir());
           }, leTheme.favori),
           boutonAction('agrandir', 'Plein écran', basculerImmersion),
+          boutonAction('envoyer', 'Partager', () => partagerThemes([leTheme])),
           boutonAction('crayon', 'Modifier', () => { location.hash = '#/t/' + id + '/modifier'; })
         ]
       }));
@@ -937,5 +1148,6 @@ const Vues = (() => {
     return Promise.resolve();
   }
 
-  return { accueil, domaine, theme, editeur, recherche, reglages, basculerImmersion };
+  return { accueil, domaine, theme, editeur, recherche, reglages, importer,
+           partagerThemes, basculerImmersion };
 })();

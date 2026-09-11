@@ -4,7 +4,7 @@
  * en sous-sol. Tout le nécessaire est mis en cache à l'installation.
  */
 
-const CACHE = 'vox-v1';
+const CACHE = 'vox-v2';
 
 const COQUILLE = [
   './',
@@ -14,6 +14,7 @@ const COQUILLE = [
   './js/bible.js',
   './js/store.js',
   './js/seed.js',
+  './js/partage.js',
   './js/ui.js',
   './js/vues.js',
   './js/app.js',
