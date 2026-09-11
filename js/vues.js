@@ -44,6 +44,15 @@ const Vues = (() => {
     });
   }
 
+  /**
+   * N'accepte qu'une adresse sûre. Les paquets viennent parfois de tiers :
+   * un « javascript: » glissé dans un bloc ne doit jamais devenir cliquable.
+   */
+  function lienSur(url) {
+    const propre = String(url || '').trim();
+    return /^(https?:|jwlibrary:)/i.test(propre) ? propre : null;
+  }
+
   /** Découpe un texte libre et transforme les références rencontrées en liens. */
   function semerLiens(parent, texte) {
     const refs = Bible.reperer(texte);
@@ -674,7 +683,31 @@ const Vues = (() => {
     if (bloc.type === 'question') {
       const boite = el('blockquote.question');
       boite.appendChild(texteEnrichi(bloc.texte, 'question__texte'));
+      // Ce qu'on espère entendre : un pense-bête, pas une phrase à lire.
+      if (bloc.attendu) boite.appendChild(el('p.question__attendu', { texte: bloc.attendu }));
       return boite;
+    }
+
+    if (bloc.type === 'media') {
+      const adresse = lienSur(bloc.url);
+      const dedans = [
+        el('span.media__icone', null, [icone('media')]),
+        el('span.media__texte', null, [
+          el('span.media__titre', { texte: bloc.titre || 'Document' }),
+          bloc.idee ? el('span.media__note', { texte: bloc.idee }) : null
+        ])
+      ];
+      if (!adresse) {
+        // Sans adresse exploitable, la carte reste lisible mais inerte.
+        return el('div.media.media--inerte', null, dedans.concat([
+          bloc.url ? el('span.media__brut', { texte: bloc.url }) : null
+        ]));
+      }
+      return el('a.media', {
+        href: adresse,
+        rel: 'noopener noreferrer',
+        target: /^https?:/i.test(adresse) ? '_blank' : null
+      }, dedans);
     }
 
     if (bloc.type === 'note') {
@@ -748,6 +781,7 @@ const Vues = (() => {
     { type: 'texte',    libelle: 'Texte',     glyphe: 'texte' },
     { type: 'ecriture', libelle: 'Écriture',  glyphe: 'livre' },
     { type: 'image',    libelle: 'Photo',     glyphe: 'photo' },
+    { type: 'media',    libelle: 'Vidéo, publication', glyphe: 'media' },
     { type: 'note',     libelle: 'Aparté',    glyphe: 'note' }
   ];
 
@@ -946,9 +980,45 @@ const Vues = (() => {
             enregistrer();
           }));
 
+        } else if (bloc.type === 'media') {
+          const champTitre = el('input.champ', { type: 'text', placeholder: 'Titre — « Vidéo : … », « Cahier, page 4 »' });
+          champTitre.value = bloc.titre || '';
+          champTitre.addEventListener('input', () => {
+            bloc.titre = champTitre.value;
+            enregistrer();
+          });
+
+          const avis = el('span.bloc__apercu');
+          const champUrl = el('input.champ', { type: 'url', placeholder: 'https://www.jw.org/…', autocapitalize: 'off', spellcheck: 'false' });
+          champUrl.value = bloc.url || '';
+          const verifierUrl = () => {
+            if (!champUrl.value.trim()) {
+              avis.textContent = 'Sans adresse, la carte s’affiche sans être cliquable.';
+              avis.className = 'bloc__apercu';
+              return;
+            }
+            const bon = !!lienSur(champUrl.value);
+            avis.textContent = bon ? 'Adresse valide' : 'Seules les adresses http, https et jwlibrary sont ouvertes.';
+            avis.className = 'bloc__apercu' + (bon ? ' bloc__apercu--bon' : ' bloc__apercu--flou');
+          };
+          champUrl.addEventListener('input', () => {
+            bloc.url = champUrl.value;
+            verifierUrl();
+            enregistrer();
+          });
+          verifierUrl();
+
+          corps.appendChild(champTitre);
+          corps.appendChild(champUrl);
+          corps.appendChild(avis);
+          corps.appendChild(zoneTexte(bloc.idee, 'Ce qu’on en retient (facultatif)', v => {
+            bloc.idee = v;
+            enregistrer();
+          }));
+
         } else {
           const reperes = {
-            question: 'L’objection ou la question posée',
+            question: 'La question posée — à l’auditoire, ou à soi-même',
             note: 'Un rappel pour vous-même',
             texte: 'Le raisonnement. Les références écrites ici deviennent cliquables.'
           };
@@ -956,6 +1026,12 @@ const Vues = (() => {
             bloc.texte = v;
             enregistrer();
           }));
+          if (bloc.type === 'question') {
+            corps.appendChild(zoneTexte(bloc.attendu, 'Réponse attendue, relance (facultatif)', v => {
+              bloc.attendu = v;
+              enregistrer();
+            }));
+          }
         }
 
         return el('section.bloc', null, [

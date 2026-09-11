@@ -658,6 +658,69 @@ h1, h2, h3 { font-weight: 600; letter-spacing: -.01em; }
   text-align: center;
 }
 
+/* ------------------------------------------------- question et media --- */
+
+.question__attendu {
+  margin: 10px 0 0;
+  padding-left: 14px;
+  border-left: 2px solid var(--bord);
+  font-family: var(--sans);
+  font-style: normal;
+  font-size: calc(.86rem * var(--echelle));
+  color: var(--doux);
+}
+
+.media {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  margin: 18px 0;
+  padding: 14px 16px;
+  border: 1px solid var(--bord);
+  border-radius: var(--rayon);
+  background: var(--carte);
+  color: var(--texte);
+  text-decoration: none;
+}
+
+a.media:hover { border-color: var(--accent); }
+
+.media__icone {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px; height: 42px;
+  flex: none;
+  border-radius: 11px;
+  background: var(--accent-pale);
+  color: var(--accent);
+}
+
+.media__texte { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+
+.media__titre {
+  font-family: var(--sans);
+  font-size: calc(.96rem * var(--echelle));
+  font-weight: 600;
+}
+
+.media__note {
+  font-family: var(--sans);
+  font-size: calc(.86rem * var(--echelle));
+  color: var(--doux);
+}
+
+.media--inerte { opacity: .75; }
+
+.media--inerte .media__icone { background: var(--fond-creux); color: var(--doux); }
+
+.media__brut {
+  font-family: var(--sans);
+  font-size: .74rem;
+  color: var(--doux);
+  word-break: break-all;
+}
+
 /* --------------------------------------------------------- rappel --- */
 
 .rappel {

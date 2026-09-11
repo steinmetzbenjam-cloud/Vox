@@ -76,10 +76,12 @@ const Partage = (() => {
         blocs.push({ type: 'image', reference, legende: bloc.legende || '' });
         continue;
       }
+      // Liste blanche : rien d'autre que ces champs ne sort de l'appareil,
+      // et rien d'autre n'entre depuis un paquet reçu.
       const copie = { type: bloc.type };
-      if (bloc.texte)     copie.texte = bloc.texte;
-      if (bloc.reference) copie.reference = bloc.reference;
-      if (bloc.idee)      copie.idee = bloc.idee;
+      for (const champ of ['texte', 'reference', 'idee', 'attendu', 'titre', 'url']) {
+        if (bloc[champ]) copie[champ] = bloc[champ];
+      }
       blocs.push(copie);
     }
     return {

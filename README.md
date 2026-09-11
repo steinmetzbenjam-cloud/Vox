@@ -27,7 +27,17 @@ Un thème se compose de blocs qu'on empile dans l'ordre voulu :
 | **Texte** | Le raisonnement. Les références écrites dedans deviennent cliquables |
 | **Écriture** | Une référence isolée, avec l'idée à retenir |
 | **Photo** | Une photo du texte, d'une publication, d'une note manuscrite |
+| **Vidéo, publication** | Un titre et une adresse : vidéo jw.org, article, lien JW Library |
 | **Aparté** | Un rappel pour soi : « ne pas enchaîner trop vite » |
+
+Un bloc **Question** accepte une *réponse attendue* facultative, affichée en
+petit sous la question. C'est ce qui permet de préparer une partie coopérative :
+la question se lit à voix haute, la réponse reste un pense-bête.
+
+Les adresses d'un bloc **Vidéo, publication** ne sont ouvertes que si elles
+commencent par `http:`, `https:` ou `jwlibrary:`. Un paquet reçu de quelqu'un
+d'autre ne peut donc pas glisser une adresse exécutable : la carte s'affiche,
+mais elle reste inerte.
 
 ## Les références bibliques
 
@@ -113,10 +123,14 @@ quelqu'un d'autre :
 
 Règles :
 
-- Les cinq types de blocs sont `question`, `texte`, `ecriture`, `image`, `note`.
-- `question`, `texte` et `note` n'ont qu'un champ `texte`. Les références
-  écrites dedans deviennent cliquables toutes seules.
+- Les six types de blocs sont `question`, `texte`, `ecriture`, `image`,
+  `media`, `note`.
+- `question`, `texte` et `note` ont un champ `texte`. Les références écrites
+  dedans deviennent cliquables toutes seules. `question` accepte en plus un
+  champ `attendu` : la réponse espérée, affichée discrètement.
 - `ecriture` prend une `reference` en clair et une `idee` facultative.
+- `media` prend un `titre`, une `url` (`http:`, `https:` ou `jwlibrary:`
+  uniquement) et une `idee` facultative.
 - `image` pointe vers une clé de l'objet `images` par son champ `reference`.
   Un bloc image dont la photo manque est simplement ignoré à l'import.
 - `images` peut être omis. Les identifiants, eux, ne doivent **pas** figurer :
