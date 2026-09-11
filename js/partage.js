@@ -252,12 +252,15 @@ const Partage = (() => {
   /** Résumé montré avant de confirmer un import. */
   function resumer(paquet) {
     const themes = paquet.themes.length;
-    const ecritures = paquet.themes.reduce((n, t) =>
-      n + t.blocs.filter(b => b.type === 'ecriture').length, 0);
+    const compter = type => paquet.themes.reduce((n, t) =>
+      n + t.blocs.filter(b => b.type === type).length, 0);
+    const ecritures = compter('ecriture');
+    const medias = compter('media');
     const photos = Object.keys(paquet.images || {}).length;
     const morceaux = [themes + (themes > 1 ? ' thèmes' : ' thème')];
     if (ecritures) morceaux.push(ecritures + (ecritures > 1 ? ' écritures' : ' écriture'));
     if (photos) morceaux.push(photos + (photos > 1 ? ' photos' : ' photo'));
+    if (medias) morceaux.push(medias + (medias > 1 ? ' documents' : ' document'));
     return morceaux.join(' · ');
   }
 
