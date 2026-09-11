@@ -56,6 +56,8 @@ const UI = (() => {
     telecharger:['M12 4v10', 'M8 10.5l4 4 4-4', 'M5 19h14'],
     televerser: ['M12 18V8', 'M8 11.5l4-4 4 4', 'M5 19h14'],
     etiquette:  ['M4 11V5a1 1 0 011-1h6l9 9-7 7z', 'M8.5 8h.01'],
+    media:      ['M4 6.5a2.5 2.5 0 012.5-2.5h11a2.5 2.5 0 012.5 2.5v11a2.5 2.5 0 01-2.5 2.5h-11A2.5 2.5 0 014 17.5z',
+                 'M10.2 9.1l4.6 2.9-4.6 2.9z'],
     envoyer:    ['M12 3.5v11', 'M8 7.5l4-4 4 4',
                  'M7 11H5.5a1 1 0 00-1 1v7.5a1 1 0 001 1h13a1 1 0 001-1V12a1 1 0 00-1-1H17'],
     lien:       ['M10.8 13.2a3.6 3.6 0 005.4.4l2-2a3.6 3.6 0 00-5.1-5.1l-1.1 1.1',
@@ -178,9 +180,11 @@ const UI = (() => {
     const liste = blocs || [];
     const ecritures = liste.filter(b => b.type === 'ecriture').length;
     const photos    = liste.filter(b => b.type === 'image').length;
+    const medias    = liste.filter(b => b.type === 'media').length;
     const morceaux = [];
     if (ecritures) morceaux.push(ecritures + (ecritures > 1 ? ' écritures' : ' écriture'));
     if (photos)    morceaux.push(photos + (photos > 1 ? ' photos' : ' photo'));
+    if (medias)    morceaux.push(medias + (medias > 1 ? ' documents' : ' document'));
     if (!morceaux.length) morceaux.push('vide');
     return morceaux.join(' · ');
   }
