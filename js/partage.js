@@ -236,6 +236,7 @@ const Partage = (() => {
         }
         return Store.themes.enregistrer({
           domaineId,
+          sien: true, // reçu de quelqu'un : à sauvegarder comme le reste
           titre: theme.titre,
           soustitre: theme.soustitre || '',
           situations: (theme.situations || []).slice(),
