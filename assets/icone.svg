@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Vox">
+  <defs>
+    <linearGradient id="fond" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#35786a"/>
+      <stop offset="1" stop-color="#225347"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#fond)"/>
+  <circle cx="184" cy="256" r="34" fill="#f6f3ec"/>
+  <path d="M240.6 183.5 A92 92 0 0 1 240.6 328.5"
+        fill="none" stroke="#f6f3ec" stroke-width="26" stroke-linecap="round"/>
+  <path d="M277.6 136.2 A152 152 0 0 1 277.6 375.8"
+        fill="none" stroke="#f6f3ec" stroke-width="26" stroke-linecap="round" opacity=".62"/>
+</svg>
