@@ -21,7 +21,7 @@ const Vues = (() => {
       }, [icone('retour')]));
     }
     const droite = el('div.entete__cote.entete__cote--fin', null, options.actions || []);
-    return el('header.entete', null, [
+    return el('header.entete' + (options.collante ? '.entete--collante' : ''), null, [
       gauche,
       el('div.entete__titre', { texte: options.titre || '' }),
       droite
@@ -81,6 +81,40 @@ const Vues = (() => {
       el('p.vide__texte', { texte: message }),
       action || null
     ]);
+  }
+
+  /* — reprendre là où l'on en est, entre la lecture et l'éditeur — */
+
+  const HAUT_UTILE = 76; // sous l'en-tête
+
+  /** Le bloc en haut de l'écran, ou null si l'on est encore sur le titre. */
+  function blocEnVue(conteneur, leTheme) {
+    if (window.scrollY < 40) return null;
+    for (const noeud of conteneur.querySelectorAll('[data-rang]')) {
+      if (noeud.getBoundingClientRect().bottom > HAUT_UTILE) {
+        const rang = Number(noeud.dataset.rang);
+        const bloc = (leTheme.blocs || [])[rang];
+        return { theme: leTheme.id, rang, id: bloc && bloc.id };
+      }
+    }
+    return null;
+  }
+
+  /** Le rang visé pour ce thème, s'il y en a un ; consommé une seule fois. */
+  function rangVise(leTheme) {
+    const vise = Etat.blocVise;
+    Etat.blocVise = null;
+    if (!vise || vise.theme !== leTheme.id) return null;
+    const blocs = leTheme.blocs || [];
+    const parId = vise.id ? blocs.findIndex(b => b.id === vise.id) : -1;
+    if (parId >= 0) return parId;
+    return vise.rang < blocs.length ? vise.rang : null;
+  }
+
+  function ramenerA(noeud) {
+    if (!noeud) return;
+    const haut = noeud.getBoundingClientRect().top + window.scrollY - HAUT_UTILE;
+    window.scrollTo(0, Math.max(0, haut));
   }
 
   /* =====================================================================
@@ -326,6 +360,11 @@ const Vues = (() => {
       : 'themes') + '.vox.json';
 
     const photos = Partage.comptePhotos(themes);
+    const documents = Partage.compteDocuments(themes);
+    const joints = [
+      photos ? photos + (photos > 1 ? ' photos' : ' photo') : '',
+      documents ? documents + (documents > 1 ? ' documents' : ' document') : ''
+    ].filter(Boolean).join(' et ');
 
     function envoyerFichier() {
       Partage.fabriquer(themes, { avecPhotos: true }).then(paquet => {
@@ -394,15 +433,15 @@ const Vues = (() => {
       el('button.bouton.bouton--plein.bouton--large', { type: 'button', onclick: envoyerFichier },
          [icone('envoyer'), 'Envoyer le fichier']),
       el('p.aide', {
-        texte: photos
-          ? 'Le fichier contient les ' + photos + (photos > 1 ? ' photos.' : ' photo.')
+        texte: joints
+          ? 'Le fichier contient tout, y compris ' + joints + '.'
           : 'Le fichier contient tout le thème.'
       }),
       el('button.bouton.bouton--discret.bouton--large', { type: 'button', onclick: copierLien },
          [icone('lien'), 'Copier un lien']),
       el('p.aide', {
-        texte: photos
-          ? 'Le lien s\u2019ouvre d\u2019une seule touche, mais laisse les photos de côté.'
+        texte: joints
+          ? 'Le lien s\u2019ouvre d\u2019une seule touche, mais laisse de côté ' + joints + '.'
           : 'Le lien s\u2019ouvre d\u2019une seule touche, dans un message ou un mail.'
       })
     ]);
@@ -637,9 +676,18 @@ const Vues = (() => {
           }, leTheme.favori),
           boutonAction('agrandir', 'Plein écran', basculerImmersion),
           boutonAction('envoyer', 'Partager', () => partagerThemes([leTheme])),
-          boutonAction('crayon', 'Modifier', () => { location.hash = '#/t/' + id + '/modifier'; })
+          boutonAction('crayon', 'Modifier', modifierIci)
         ]
       }));
+
+      // Modifier à l'endroit où l'on lit, sans remonter en haut du thème.
+      function modifierIci() {
+        Etat.blocVise = blocEnVue(conteneur, leTheme);
+        location.hash = '#/t/' + id + '/modifier';
+      }
+      conteneur.appendChild(el('button.crayon-flottant', {
+        type: 'button', 'aria-label': 'Modifier ici', title: 'Modifier ici', onclick: modifierIci
+      }, [icone('crayon')]));
 
       const lecture = el('article.lecture');
       lecture.appendChild(el('h1.lecture__titre', { texte: leTheme.titre }));
@@ -661,11 +709,19 @@ const Vues = (() => {
         ));
       }
 
-      for (const bloc of (leTheme.blocs || [])) {
-        lecture.appendChild(rendreBloc(bloc));
-      }
+      (leTheme.blocs || []).forEach((bloc, rang) => {
+        const noeud = rendreBloc(bloc);
+        noeud.dataset.rang = rang;
+        lecture.appendChild(noeud);
+      });
 
       conteneur.appendChild(lecture);
+
+      // Retour de l'éditeur : on revient au bloc qu'on était en train de modifier.
+      const rang = rangVise(leTheme);
+      if (rang !== null) {
+        requestAnimationFrame(() => ramenerA(lecture.querySelector('[data-rang="' + rang + '"]')));
+      }
 
       // Passage au thème voisin sans repasser par la liste.
       return Store.themes.parDomaine(leTheme.domaineId).then(fratrie => {
@@ -725,9 +781,10 @@ const Vues = (() => {
     }
 
     if (bloc.type === 'note') {
-      const boite = el('aside.apparte', null, [icone('note', 'ic--apparte')]);
-      boite.appendChild(texteEnrichi(bloc.texte, 'apparte__texte'));
-      return boite;
+      return el('aside.apparte', null, [
+        icone('note', 'ic--apparte'),
+        el('div.apparte__corps', null, [texteEnrichi(bloc.texte, 'apparte__texte')])
+      ]);
     }
 
     if (bloc.type === 'ecriture') {
@@ -749,6 +806,20 @@ const Vues = (() => {
       }
       if (bloc.idee) boite.appendChild(el('p.ecriture__idee', { texte: bloc.idee }));
       return boite;
+    }
+
+    if (bloc.type === 'document') {
+      const dedans = [
+        el('span.media__icone', null, [icone('fichier')]),
+        el('span.media__texte', null, [
+          el('span.media__titre', { texte: bloc.titre || bloc.nom || 'Document' }),
+          el('span.media__note', { texte: [decrireFichier(bloc), bloc.idee].filter(Boolean).join(' · ') })
+        ])
+      ];
+      if (!bloc.fichierId) return el('div.media.media--inerte', null, dedans);
+      return el('button.media.document', {
+        type: 'button', onclick: () => ouvrirDocument(bloc)
+      }, dedans.concat([el('span.document__ouvrir', null, [icone('agrandir')])]));
     }
 
     if (bloc.type === 'image') {
@@ -836,6 +907,152 @@ const Vues = (() => {
     panneau.classList.add('modale__panneau--loupe');
   }
 
+  /* — documents joints — */
+
+  const GENRES_FICHIERS = [
+    [/pdf$/i, /\.pdf$/i, 'PDF'],
+    [/^image\//i, /\.(jpe?g|png|gif|webp|heic|avif)$/i, 'Image'],
+    [/^video\//i, /\.(mp4|m4v|mov|webm)$/i, 'Vidéo'],
+    [/^audio\//i, /\.(mp3|m4a|aac|wav|ogg)$/i, 'Son'],
+    [/word/i, /\.docx?$/i, 'Word'],
+    [/presentation|powerpoint/i, /\.pptx?$/i, 'PowerPoint'],
+    [/sheet|excel/i, /\.xlsx?$/i, 'Excel'],
+    [/^text\//i, /\.(txt|md)$/i, 'Texte']
+  ];
+
+  function genreFichier(mime, nom) {
+    for (const [parType, parNom, libelle] of GENRES_FICHIERS) {
+      if ((mime && parType.test(mime)) || (nom && parNom.test(nom))) return libelle;
+    }
+    const extension = String(nom || '').match(/\.([a-z0-9]{1,5})$/i);
+    return extension ? extension[1].toUpperCase() : 'Document';
+  }
+
+  function taillelisible(octets) {
+    if (!octets) return '';
+    if (octets < 1024 * 1024) return Math.max(1, Math.round(octets / 1024)) + ' ko';
+    return (octets / (1024 * 1024)).toFixed(1).replace('.', ',') + ' Mo';
+  }
+
+  function decrireFichier(bloc) {
+    if (!bloc.fichierId) return 'Document absent';
+    return [genreFichier(bloc.mime, bloc.nom), taillelisible(bloc.taille)].filter(Boolean).join(' · ');
+  }
+
+  /**
+   * Ouvre un document joint en plein écran, par-dessus le thème. Ce que le
+   * navigateur sait montrer (PDF, image, vidéo, son, texte) s'affiche sur
+   * place ; le reste se confie à une autre application.
+   */
+  function ouvrirDocument(bloc) {
+    const titre = bloc.titre || bloc.nom || 'Document';
+    const scene = el('div.visionneuse__scene');
+    const reglage = el('div.visionneuse__reglage');
+    let url = null;
+    let blob = null;
+    let lecteur = null;
+
+    function ouvrirAilleurs() {
+      if (!blob) return;
+      const nom = bloc.nom || titre;
+      const fichier = new File([blob], nom, { type: blob.type || bloc.mime || '' });
+      if (navigator.canShare && navigator.canShare({ files: [fichier] })) {
+        navigator.share({ files: [fichier], title: titre }).catch(() => {});
+        return;
+      }
+      const lien = el('a', { href: url, download: nom, hidden: true });
+      document.body.appendChild(lien);
+      lien.click();
+      lien.remove();
+    }
+
+    const visionneuse = el('div.visionneuse', { role: 'dialog', 'aria-modal': 'true', 'aria-label': titre }, [
+      el('div.visionneuse__barre', null, [
+        el('button.rond', { type: 'button', 'aria-label': 'Fermer', title: 'Fermer', onclick: fermer }, [icone('croix')]),
+        el('span.visionneuse__titre', { texte: titre }),
+        reglage,
+        el('button.rond', {
+          type: 'button', 'aria-label': 'Ouvrir avec une autre application',
+          title: 'Ouvrir avec une autre application', onclick: ouvrirAilleurs
+        }, [icone('envoyer')])
+      ]),
+      scene
+    ]);
+
+    function surTouche(ev) {
+      if (ev.key === 'Escape' && !document.fullscreenElement) fermer();
+    }
+
+    function fermer() {
+      if (lecteur) lecteur.arreter();
+      visionneuse.remove();
+      if (url) URL.revokeObjectURL(url);
+      document.body.classList.remove('sans-defilement');
+      document.removeEventListener('keydown', surTouche);
+      window.removeEventListener('hashchange', fermer);
+      if (document.fullscreenElement === visionneuse && document.exitFullscreen) {
+        document.exitFullscreen().catch(() => {});
+      }
+    }
+
+    document.body.appendChild(visionneuse);
+    document.body.classList.add('sans-defilement');
+    document.addEventListener('keydown', surTouche);
+    window.addEventListener('hashchange', fermer);
+    // Demandé tout de suite, pendant que le toucher compte encore comme un geste.
+    if (visionneuse.requestFullscreen) visionneuse.requestFullscreen().catch(() => {});
+
+    Store.images.obtenir(bloc.fichierId).then(enr => {
+      if (!enr || !enr.blob) {
+        scene.appendChild(el('p.visionneuse__avis', { texte: 'Ce document n’est plus sur cet appareil.' }));
+        return;
+      }
+      blob = enr.blob;
+      url = URL.createObjectURL(blob);
+      const genre = genreFichier(blob.type || bloc.mime, bloc.nom);
+      let support = null;
+      if (genre === 'PDF' && LecteurPdf.necessaire()) {
+        // iPhone, iPad, Android : pdf.js dessine chaque page.
+        lecteur = LecteurPdf.afficher(blob, scene);
+        reglage.append(
+          el('button.rond', { type: 'button', 'aria-label': 'Réduire', title: 'Réduire', onclick: () => lecteur.zoomer(-1) }, [icone('moins')]),
+          el('button.rond', { type: 'button', 'aria-label': 'Agrandir', title: 'Agrandir', onclick: () => lecteur.zoomer(1) }, [icone('plus')])
+        );
+        lecteur.pret.catch(() => {
+          reglage.innerHTML = '';
+          scene.appendChild(el('div.visionneuse__avis', null, [
+            icone('fichier'),
+            el('p', { texte: 'Ce PDF n’a pas pu être affiché ici. Ouvrez-le avec une autre application.' }),
+            el('button.bouton.bouton--plein', { type: 'button', onclick: ouvrirAilleurs }, [icone('envoyer'), 'Ouvrir avec…'])
+          ]));
+        });
+        return;
+      }
+      if (genre === 'PDF') {
+        support = el('iframe.visionneuse__cadre', { src: url, title: titre });
+      } else if (genre === 'Texte') {
+        support = el('iframe.visionneuse__cadre.visionneuse__cadre--texte', { src: url, title: titre });
+      } else if (genre === 'Image') {
+        support = el('img.visionneuse__image', { src: url, alt: titre });
+      } else if (genre === 'Vidéo') {
+        support = el('video.visionneuse__video', { src: url, controls: true, playsinline: true });
+      } else if (genre === 'Son') {
+        support = el('audio.visionneuse__son', { src: url, controls: true });
+      }
+      if (support) {
+        scene.appendChild(support);
+        return;
+      }
+      scene.appendChild(el('div.visionneuse__avis', null, [
+        icone('fichier'),
+        el('p', { texte: 'Vox ne sait pas afficher un document ' + genre + '. Ouvrez-le avec une autre application.' }),
+        el('button.bouton.bouton--plein', { type: 'button', onclick: ouvrirAilleurs }, [icone('envoyer'), 'Ouvrir avec…'])
+      ]));
+    }).catch(() => {
+      scene.appendChild(el('p.visionneuse__avis', { texte: 'Ce document n’a pas pu être lu.' }));
+    });
+  }
+
   function basculerImmersion() {
     const actif = document.body.classList.toggle('immersif');
     if (actif && document.documentElement.requestFullscreen) {
@@ -855,6 +1072,7 @@ const Vues = (() => {
     { type: 'texte',    libelle: 'Texte',     glyphe: 'texte' },
     { type: 'ecriture', libelle: 'Écriture',  glyphe: 'livre' },
     { type: 'image',    libelle: 'Photo',     glyphe: 'photo' },
+    { type: 'document', libelle: 'Document',  glyphe: 'fichier' },
     { type: 'media',    libelle: 'Vidéo, lien', glyphe: 'media' },
     { type: 'note',     libelle: 'Aparté',    glyphe: 'note' }
   ];
@@ -952,6 +1170,44 @@ const Vues = (() => {
       appliquer(v.slice(0, a) + bloc + v.slice(b), a, a + bloc.length);
     }
 
+    const OUVRE_CADRE = new RegExp('^:::\\s*(' + MiseEnPage.COULEURS.join('|') + ')\\s*$');
+
+    /**
+     * Encadre en couleur les lignes sélectionnées (ou la ligne du curseur).
+     * Déjà encadrées : la couleur change, ou le cadre disparaît (null).
+     */
+    function encadrer(couleur) {
+      const v = zone.value;
+      const a = v.lastIndexOf('\n', debut - 1) + 1;
+      const finSelection = fin > debut && v[fin - 1] === '\n' ? fin - 1 : fin;
+      let b = v.indexOf('\n', finSelection);
+      if (b < 0) b = v.length;
+      const contenu = v.slice(a, b);
+
+      const debutPrecedente = a > 0 ? v.lastIndexOf('\n', a - 2) + 1 : -1;
+      const precedente = a > 0 ? v.slice(debutPrecedente, a - 1) : null;
+      let finSuivante = b < v.length ? v.indexOf('\n', b + 1) : -1;
+      if (b < v.length && finSuivante < 0) finSuivante = v.length;
+      const suivante = b < v.length ? v.slice(b + 1, finSuivante) : null;
+
+      if (precedente !== null && suivante !== null &&
+          OUVRE_CADRE.test(precedente.trim()) && /^:::\s*$/.test(suivante.trim())) {
+        if (!couleur) {
+          appliquer(v.slice(0, debutPrecedente) + contenu + v.slice(finSuivante),
+            debutPrecedente, debutPrecedente + contenu.length);
+          return;
+        }
+        const ouvre = ':::' + couleur + '\n';
+        appliquer(v.slice(0, debutPrecedente) + ouvre + contenu + '\n:::' + v.slice(finSuivante),
+          debutPrecedente + ouvre.length, debutPrecedente + ouvre.length + contenu.length);
+        return;
+      }
+      if (!couleur) return;
+      const ouvre = ':::' + couleur + '\n';
+      appliquer(v.slice(0, a) + ouvre + contenu + '\n:::' + v.slice(b),
+        a + ouvre.length, a + ouvre.length + contenu.length);
+    }
+
     function inserer(texte) {
       const v = zone.value;
       const avant = debut && v[debut - 1] !== '\n' ? '\n' : '';
@@ -1008,16 +1264,26 @@ const Vues = (() => {
     };
     zone.addEventListener('input', dessinerApercu);
 
-    const couleurs = el('div.outils__couleurs', { hidden: true }, [
-      ...MiseEnPage.COULEURS.map(c => el('button.pastille.pastille--' + c, {
-        type: 'button', 'aria-label': c, title: c,
-        onclick: () => { couleurs.hidden = true; colorer(c); }
-      })),
-      el('button.pastille.pastille--aucune', {
-        type: 'button', 'aria-label': 'Sans couleur', title: 'Sans couleur',
-        onclick: () => { couleurs.hidden = true; colorer(null); }
-      })
-    ]);
+    const nuancier = (classe, legende, choisir) => {
+      const rangee = el('div.outils__couleurs', { hidden: true }, [
+        el('span.outils__legende', { texte: legende }),
+        ...MiseEnPage.COULEURS.map(c => el('button.pastille.pastille--' + c + classe, {
+          type: 'button', 'aria-label': c, title: c,
+          onclick: () => { rangee.hidden = true; choisir(c); }
+        })),
+        el('button.pastille.pastille--aucune' + classe, {
+          type: 'button', 'aria-label': 'Aucun', title: 'Aucun',
+          onclick: () => { rangee.hidden = true; choisir(null); }
+        })
+      ]);
+      for (const bouton of rangee.querySelectorAll('button')) {
+        bouton.addEventListener('mousedown', ev => ev.preventDefault());
+      }
+      return rangee;
+    };
+    const couleurs = nuancier('', 'Couleur du texte', colorer);
+    const cadres = nuancier('.pastille--cadre', 'Encadrer', encadrer);
+    const basculer = (montre, cache) => { cache.hidden = true; montre.hidden = !montre.hidden; };
 
     const outil = (contenu, libelle, action, classe) => {
       const bouton = el('button.outil' + (classe ? '.' + classe : ''), {
@@ -1043,7 +1309,8 @@ const Vues = (() => {
       outil([el('u', { texte: 'S' })], 'Souligné', () => entourer('++', '++')),
       outil([el('s', { texte: 'ab' })], 'Barré', () => entourer('~~', '~~')),
       outil([el('mark.mp-surligne', { texte: 'ab' })], 'Surligner', () => entourer('==', '==')),
-      outil([el('span.outil__couleur', { texte: 'A' })], 'Couleur', () => { couleurs.hidden = !couleurs.hidden; }),
+      outil([el('span.outil__couleur', { texte: 'A' })], 'Couleur', () => basculer(couleurs, cadres)),
+      outil([icone('cadre')], 'Encadrer en couleur', () => basculer(cadres, couleurs)),
       outil(['•'], 'Liste à puces', () => prefixer('- ')),
       outil(['1.'], 'Liste numérotée', () => prefixer('1. ')),
       outil(['❝'], 'Citation', () => prefixer('> ')),
@@ -1064,7 +1331,7 @@ const Vues = (() => {
       zone.dispatchEvent(new Event('input'));
     });
 
-    return { barre: el('div.outils__cadre', null, [barre, couleurs]), apercu };
+    return { barre: el('div.outils__cadre', null, [barre, couleurs, cadres]), apercu };
   }
 
   function editeur(conteneur, id) {
@@ -1090,19 +1357,18 @@ const Vues = (() => {
         }, 500);
       }
 
+      // En quittant, la lecture reprend au bloc qu'on avait sous les yeux.
+      function terminer() {
+        clearTimeout(minuterie);
+        Etat.blocVise = blocEnVue(pile, brouillon);
+        Store.themes.enregistrer(brouillon).then(() => { location.hash = '#/t/' + id; });
+      }
+
       conteneur.appendChild(entete({
-        retour: () => {
-          clearTimeout(minuterie);
-          Store.themes.enregistrer(brouillon).then(() => { location.hash = '#/t/' + id; });
-        },
+        retour: terminer,
         titre: 'Préparation',
-        actions: [
-          temoin,
-          boutonAction('check', 'Terminé', () => {
-            clearTimeout(minuterie);
-            Store.themes.enregistrer(brouillon).then(() => { location.hash = '#/t/' + id; });
-          })
-        ]
+        collante: true,
+        actions: [temoin, boutonAction('check', 'Terminé', terminer)]
       }));
 
       const champTitre = el('input.champ.champ--titre', { type: 'text', placeholder: 'Titre du thème' });
@@ -1179,10 +1445,8 @@ const Vues = (() => {
       }
 
       function supprimerBloc(index) {
-        const bloc = brouillon.blocs[index];
-        const suite = bloc.type === 'image' && bloc.imageId
-          ? Store.images.supprimer(bloc.imageId)
-          : Promise.resolve();
+        const fichier = Store.fichierDuBloc(brouillon.blocs[index]);
+        const suite = fichier ? Store.images.supprimer(fichier) : Promise.resolve();
         suite.then(() => {
           brouillon.blocs.splice(index, 1);
           dessinerBlocs();
@@ -1277,6 +1541,64 @@ const Vues = (() => {
             enregistrer();
           }));
 
+        } else if (bloc.type === 'document') {
+          const choix = el('input', { type: 'file', hidden: true });
+          choix.addEventListener('change', () => {
+            const fichier = choix.files && choix.files[0];
+            if (!fichier) return;
+            const lourd = fichier.size > 25 * 1024 * 1024;
+            const accord = lourd
+              ? UI.confirmer('Document volumineux',
+                'Ce fichier fait ' + taillelisible(fichier.size) + ' : il alourdira les sauvegardes et les envois. L’ajouter quand même ?',
+                'Ajouter')
+              : Promise.resolve(true);
+            accord.then(oui => {
+              if (!oui) return;
+              // Un Blob plutôt qu'un File : seul le contenu et son type sont gardés.
+              return Store.images.ajouter(fichier.slice(0, fichier.size, fichier.type))
+                .then(fichierId => {
+                  const ancien = bloc.fichierId;
+                  Object.assign(bloc, {
+                    fichierId, nom: fichier.name, mime: fichier.type, taille: fichier.size
+                  });
+                  if (!bloc.titre) bloc.titre = fichier.name.replace(/\.[^.]+$/, '');
+                  enregistrer();
+                  dessinerBlocs();
+                  if (ancien) Store.images.supprimer(ancien);
+                });
+            }).catch(() => UI.annoncer('Document illisible', 'erreur'));
+          });
+
+          if (bloc.fichierId) {
+            corps.appendChild(el('button.media.document.document--editeur', {
+              type: 'button', onclick: () => ouvrirDocument(bloc)
+            }, [
+              el('span.media__icone', null, [icone('fichier')]),
+              el('span.media__texte', null, [
+                el('span.media__titre', { texte: bloc.nom || 'Document' }),
+                el('span.media__note', { texte: decrireFichier(bloc) + ' · toucher pour voir' })
+              ])
+            ]));
+          }
+          corps.appendChild(choix);
+          corps.appendChild(el('button.bouton.bouton--discret', {
+            type: 'button',
+            texte: bloc.fichierId ? 'Remplacer le document' : 'Choisir un document (PDF, image, vidéo…)',
+            onclick: () => choix.click()
+          }));
+
+          const champTitreDoc = el('input.champ', { type: 'text', placeholder: 'Titre affiché — « Cahier, page 4 »' });
+          champTitreDoc.value = bloc.titre || '';
+          champTitreDoc.addEventListener('input', () => {
+            bloc.titre = champTitreDoc.value;
+            enregistrer();
+          });
+          corps.appendChild(champTitreDoc);
+          corps.appendChild(zoneTexte(bloc.idee, 'Ce qu’on en retient (facultatif)', v => {
+            bloc.idee = v;
+            enregistrer();
+          }));
+
         } else if (bloc.type === 'media') {
           const champTitre = el('input.champ', { type: 'text', placeholder: 'Titre — « Vidéo : … », « Cahier, page 4 »' });
           champTitre.value = bloc.titre || '';
@@ -1343,7 +1665,7 @@ const Vues = (() => {
           }
         }
 
-        return el('section.bloc', null, [
+        return el('section.bloc', { 'data-rang': index }, [
           el('div.bloc__barre', null, [
             el('span.bloc__genre', null, [icone(modele.glyphe), modele.libelle]),
             el('div.bloc__outils', null, [
@@ -1361,6 +1683,16 @@ const Vues = (() => {
 
       dessinerBlocs();
       conteneur.appendChild(pile);
+
+      // Venu du crayon au milieu d'un thème : on ouvre au bloc qu'on lisait.
+      const rang = rangVise(brouillon);
+      if (rang !== null) {
+        setTimeout(() => {
+          const carte = pile.querySelector('[data-rang="' + rang + '"]');
+          ramenerA(carte);
+          if (carte) carte.classList.add('bloc--vise');
+        }, 30);
+      }
 
       const palette = el('div.palette');
       for (const modele of TYPES_BLOCS) {
@@ -1388,7 +1720,7 @@ const Vues = (() => {
         type: 'button', texte: 'Supprimer ce thème',
         onclick: () => UI.confirmer(
           'Supprimer « ' + brouillon.titre + ' » ?',
-          'La préparation et ses photos seront perdues.'
+          'La préparation, ses photos et ses documents seront perdus.'
         ).then(oui => {
           if (!oui) return;
           const retour = brouillon.domaineId;
@@ -1429,7 +1761,8 @@ const Vues = (() => {
       const index = themes.map(t => {
         const morceaux = [t.titre, t.soustitre || ''].concat(t.situations || []);
         for (const bloc of (t.blocs || [])) {
-          morceaux.push(bloc.texte || '', bloc.reference || '', bloc.idee || '', bloc.legende || '');
+          morceaux.push(bloc.texte || '', bloc.reference || '', bloc.idee || '', bloc.legende || '',
+            bloc.titre || '', bloc.nom || '');
         }
         return { theme: t, plat: Bible.normaliser(morceaux.join(' ')) };
       });

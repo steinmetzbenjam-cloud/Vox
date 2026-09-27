@@ -33,6 +33,7 @@ const UI = (() => {
     retour:     ['M15 5l-7 7 7 7'],
     croix:      ['M6 6l12 12', 'M18 6L6 18'],
     plus:       ['M12 5v14', 'M5 12h14'],
+    moins:      ['M5 12h14'],
     crayon:     ['M4 20h4L18 10l-4-4L4 16z', 'M13 7l4 4'],
     etoile:     ['M12 3.5l2.6 5.4 5.9.9-4.3 4.1 1 5.9-5.2-2.8-5.2 2.8 1-5.9-4.3-4.1 5.9-.9z'],
     loupe:      ['M11 4a7 7 0 100 14 7 7 0 000-14z', 'M20 20l-4.2-4.2'],
@@ -60,6 +61,8 @@ const UI = (() => {
                  'M10.2 9.1l4.6 2.9-4.6 2.9z'],
     envoyer:    ['M12 3.5v11', 'M8 7.5l4-4 4 4',
                  'M7 11H5.5a1 1 0 00-1 1v7.5a1 1 0 001 1h13a1 1 0 001-1V12a1 1 0 00-1-1H17'],
+    fichier:    ['M6 3.5h7.5L18 8v12.5H6z', 'M13.5 3.5V8H18', 'M9 12.5h6', 'M9 16h6'],
+    cadre:      ['M4.5 4.5h15v15h-15z', 'M8 9h8', 'M8 12h8', 'M8 15h5'],
     lien:       ['M10.8 13.2a3.6 3.6 0 005.4.4l2-2a3.6 3.6 0 00-5.1-5.1l-1.1 1.1',
                  'M13.2 10.8a3.6 3.6 0 00-5.4-.4l-2 2a3.6 3.6 0 005.1 5.1l1.1-1.1']
   };
@@ -181,10 +184,12 @@ const UI = (() => {
     const ecritures = liste.filter(b => b.type === 'ecriture').length;
     const photos    = liste.filter(b => b.type === 'image').length;
     const medias    = liste.filter(b => b.type === 'media').length;
+    const documents = liste.filter(b => b.type === 'document').length;
     const morceaux = [];
     if (ecritures) morceaux.push(ecritures + (ecritures > 1 ? ' écritures' : ' écriture'));
     if (photos)    morceaux.push(photos + (photos > 1 ? ' photos' : ' photo'));
-    if (medias)    morceaux.push(medias + (medias > 1 ? ' documents' : ' document'));
+    if (documents) morceaux.push(documents + (documents > 1 ? ' documents' : ' document'));
+    if (medias)    morceaux.push(medias + (medias > 1 ? ' liens' : ' lien'));
     if (!morceaux.length) morceaux.push('vide');
     return morceaux.join(' · ');
   }

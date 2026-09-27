@@ -12,6 +12,7 @@
  *   [texte](https://…)                   ![légende](https://…/image.jpg)
  *   - puce           1. numéro           - [ ] case à cocher
  *   > citation       ---  (trait)        | tableau | à | colonnes |
+ *   :::bleu          (lignes encadrées)  :::   — un cadre en couleur
  *
  * Couleurs : rouge, orange, vert, bleu, violet, gris. Elles suivent le thème
  * clair ou sombre, au lieu d'imposer une teinte illisible sur fond noir.
@@ -132,6 +133,8 @@ const MiseEnPage = (() => {
   const TITRE    = /^(#{1,6})\s+(.*)$/;
   const TRAIT    = /^(-{3,}|\*{3,}|_{3,})$/;
   const IMAGE    = /^!\[([^\]]*)\]\(([^)\s]+)\)$/;
+  const CADRE_OUVRE = new RegExp('^:::\\s*(' + COULEURS.join('|') + ')\\s*$');
+  const CADRE_FERME = /^:::\s*$/;
   const SEPARATION_TABLEAU = /^\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?$/;
 
   /**
@@ -167,6 +170,27 @@ const MiseEnPage = (() => {
       let m;
 
       if (!net) { vider(); i++; continue; }
+
+      if ((m = net.match(CADRE_OUVRE))) {
+        // Un cadre en couleur : tout ce qu'il contient est mis en page à son tour.
+        vider();
+        const dedans = [];
+        let profondeur = 1;
+        i++;
+        while (i < lignes.length) {
+          const suivante = lignes[i].trim();
+          if (CADRE_OUVRE.test(suivante)) profondeur++;
+          else if (CADRE_FERME.test(suivante) && --profondeur === 0) { i++; break; }
+          dedans.push(lignes[i]);
+          i++;
+        }
+        const cadre = el('div.mp-cadre.mp-cadre--' + m[1]);
+        cadre.appendChild(rendre(dedans.join('\n'), reglages));
+        fragment.appendChild(cadre);
+        continue;
+      }
+
+      if (CADRE_FERME.test(net)) { vider(); i++; continue; } // fermeture orpheline
 
       if ((m = net.match(TITRE))) {
         vider();
@@ -325,6 +349,7 @@ const MiseEnPage = (() => {
   /** Le texte sans ses marques : pour un aperçu d'une ligne. */
   function retirer(texte) {
     return String(texte || '')
+      .replace(/^\s*:::.*$/gm, '')
       .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
       .replace(/\[([^\]]+)\]\{[a-z]+\}/g, '$1')
       .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
