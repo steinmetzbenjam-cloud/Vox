@@ -1,0 +1,4 @@
+pdf.js 6.3.289 (build « legacy », pour les iPhone un peu anciens)
+https://github.com/mozilla/pdf.js — licence Apache 2.0 (LICENSE)
+Polices de standard_fonts : voir LICENSE_FOXIT et LICENSE_LIBERATION.
+Mise à jour : remplacer pdf.min.mjs et pdf.worker.min.mjs par ceux de pdfjs-dist/legacy/build.

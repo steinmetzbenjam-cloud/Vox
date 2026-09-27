@@ -4,7 +4,7 @@
  * en sous-sol. Tout le nécessaire est mis en cache à l'installation.
  */
 
-const CACHE = 'vox-v5';
+const CACHE = 'vox-v6';
 
 const COQUILLE = [
   './',
@@ -18,12 +18,16 @@ const COQUILLE = [
   './js/ui.js',
   './js/mise-en-page.js',
   './js/documents.js',
+  './js/lecteur-pdf.js',
   './js/vues.js',
   './js/app.js',
   './assets/icone.svg',
   './assets/icone-180.png',
   './assets/icone-192.png',
-  './assets/icone-512.png'
+  './assets/icone-512.png',
+  // Lecteur de PDF pour iPhone et Android : disponible même hors ligne.
+  './assets/pdfjs/pdf.min.mjs',
+  './assets/pdfjs/pdf.worker.min.mjs'
 ];
 
 self.addEventListener('install', evenement => {

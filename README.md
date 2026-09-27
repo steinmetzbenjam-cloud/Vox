@@ -18,6 +18,9 @@ de l'appareil**. Elle s'installe sur l'écran d'accueil et fonctionne hors ligne
   « Accompagner un deuil »…
 - Un thème s'ouvre en **lecture plein écran**, pensée pour être lue debout, en
   situation. Le bouton ⛶ efface toutes les commandes.
+- Le **crayon rond**, en bas à droite, suit la lecture : il ouvre l'éditeur
+  directement sur le bloc qu'on avait sous les yeux, et **Terminé** ramène au
+  même endroit. Dans l'éditeur, l'en-tête reste visible en haut de l'écran.
 
 Un thème se compose de blocs qu'on empile dans l'ordre voulu :
 
@@ -27,12 +30,29 @@ Un thème se compose de blocs qu'on empile dans l'ordre voulu :
 | **Texte** | Le raisonnement, mis en page (titres, gras, couleurs, listes, tableaux). Les références écrites dedans deviennent cliquables |
 | **Écriture** | Une référence isolée, avec l'idée à retenir |
 | **Photo** | Une photo de l'appareil, ou une image en ligne par son adresse |
+| **Document** | Un fichier de l'appareil : PDF, image, vidéo, son, Word… Le toucher l'ouvre en plein écran |
 | **Vidéo, lien** | Un titre et une adresse. YouTube, Vimeo, un fichier vidéo ou audio, une image : lus directement dans Vox. Le reste (jw.org, article, JW Library) : une carte cliquable |
 | **Aparté** | Un rappel pour soi : « ne pas enchaîner trop vite » |
 
 Un bloc **Question** accepte une *réponse attendue* facultative, affichée en
 petit sous la question. C'est ce qui permet de préparer une partie coopérative :
 la question se lit à voix haute, la réponse reste un pense-bête.
+
+## Les documents joints
+
+Un bloc **Document** garde un fichier de l'appareil dans Vox, à côté des photos.
+Le toucher l'ouvre en plein écran, par-dessus le thème :
+
+- **PDF** : toutes les pages, qu'on fait défiler, avec **−** et **+** pour
+  zoomer. Sur iPhone, iPad et Android, les pages sont dessinées par pdf.js,
+  car le lecteur intégré du navigateur n'y montre que la première page (ou
+  rien). Sur ordinateur, c'est le lecteur du navigateur ;
+- **image, vidéo, son, texte** : affichés ou lus sur place ;
+- **le reste** (Word, PowerPoint…) : le bouton ↗ le confie à une autre
+  application (Pages, Word, Fichiers…).
+
+Au-delà de 25 Mo, Vox demande confirmation : un document lourd alourdit
+chaque sauvegarde et chaque envoi.
 
 Les adresses d'un bloc **Vidéo, lien** ne sont ouvertes que si elles
 commencent par `http:`, `https:` ou `jwlibrary:`. Un paquet reçu de quelqu'un
@@ -43,7 +63,9 @@ mais elle reste inerte.
 
 Les blocs **Texte**, **Question** et **Aparté** ont une barre d'outils : titre,
 sous-titre, **G**ras, *I*talique, **S**ouligné, barré, surligné, couleur,
-listes, citation, lien, image en ligne, et **Aperçu** pour voir le rendu.
+listes, citation, lien, image en ligne, **encadré** en couleur, et **Aperçu**
+pour voir le rendu. L'encadré entoure les lignes sélectionnées (ou celle du
+curseur) ; rappelé sur un texte déjà encadré, il change sa couleur ou le retire.
 
 La barre écrit pour vous quelques signes, proches du Markdown, qu'on peut aussi
 taper à la main :
@@ -58,6 +80,7 @@ taper à la main :
 | `![légende](https://…/image.jpg)` | Image en ligne, sur sa propre ligne |
 | `- point` · `1. point` · `- [ ] à faire` | Listes (deux espaces devant pour un sous-niveau) |
 | `> citation` · `---` | Citation, trait de séparation |
+| `:::bleu` … `:::` (chacun sur sa ligne) | Encadré en couleur, autour des lignes qu'il entoure |
 | `\| a \| b \|` puis `\|---\|---\|` | Tableau (la première ligne devient l'en-tête) |
 
 Les couleurs suivent le mode clair ou sombre : un rouge reste lisible sur fond
@@ -170,14 +193,18 @@ quelqu'un d'autre :
 
 Règles :
 
-- Les six types de blocs sont `question`, `texte`, `ecriture`, `image`,
-  `media`, `note`.
+- Les sept types de blocs sont `question`, `texte`, `ecriture`, `image`,
+  `document`, `media`, `note`.
 - `question`, `texte` et `note` ont un champ `texte`. Les références écrites
   dedans deviennent cliquables toutes seules. `question` accepte en plus un
   champ `attendu` : la réponse espérée, affichée discrètement.
 - `ecriture` prend une `reference` en clair et une `idee` facultative.
 - `media` prend un `titre`, une `url` (`http:`, `https:` ou `jwlibrary:`
   uniquement) et une `idee` facultative.
+- `document` pointe vers une clé de l'objet `images` par son champ
+  `reference` (un `data:` de n'importe quel type : PDF, vidéo…), avec un
+  `titre`, le `nom` du fichier et une `idee` facultative. Un lien copié ne
+  transporte pas les documents, seul le fichier le fait.
 - `image` pointe vers une clé de l'objet `images` par son champ `reference`,
   ou vers une image en ligne par un champ `url` (`https:`).
   Un bloc image dont la photo manque est simplement ignoré à l'import.
@@ -251,8 +278,9 @@ mode hors ligne (le service worker exige `http://` ou `https://`).
 
 ## Organisation du code
 
-Pas de framework, pas d'étape de compilation, pas de dépendance. Des fichiers
-JavaScript chargés dans l'ordre :
+Pas de framework, pas d'étape de compilation. Une seule bibliothèque, rangée
+dans le dépôt : pdf.js (Mozilla), chargée seulement à l'ouverture d'un PDF sur
+téléphone. Des fichiers JavaScript chargés dans l'ordre :
 
 ```
 index.html              coquille
@@ -266,9 +294,11 @@ js/partage.js           paquets de thèmes : fabrication, lien compressé, impor
 js/ui.js                éléments, icônes, modales, notifications
 js/mise-en-page.js      mise en page des textes, conversion depuis du HTML
 js/documents.js         import de documents Word, Markdown, HTML, texte
+js/lecteur-pdf.js       PDF page par page sur iPhone et Android (pdf.js)
 js/vues.js              les écrans
 js/app.js               état, photos, routeur, démarrage
 assets/                 icônes
+assets/pdfjs/           pdf.js 6.3 (build legacy), licence Apache 2.0
 ```
 
 **Un thème enregistré ressemble à ceci :**
@@ -293,7 +323,9 @@ assets/                 icônes
 
 Les photos ne sont pas stockées dans le thème : le bloc garde un `imageId` qui
 pointe vers le magasin `images`, où la photo est gardée comme Blob après avoir
-été ramenée à 1600 px de côté.
+été ramenée à 1600 px de côté. Un bloc `document` garde de même un
+`fichierId` vers ce magasin, le fichier y restant tel quel, avec son `nom`,
+son type (`mime`) et sa `taille`.
 
 ### Ajouter une icône
 

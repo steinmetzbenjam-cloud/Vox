@@ -4,7 +4,8 @@
 
 const Etat = {
   cible: 'app',   // « app » : JW Library ; « web » : jw.org
-  taille: 1       // échelle du texte en lecture
+  taille: 1,      // échelle du texte en lecture
+  blocVise: null  // { theme, rang, id } : le bloc où reprendre, entre lecture et éditeur
 };
 
 /* ---------------------------------------------------------------- photos --- */

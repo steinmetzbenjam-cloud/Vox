@@ -92,6 +92,13 @@ const Store = (() => {
 
   /* ------------------------------------------------------------ thèmes --- */
 
+  /** Le fichier stocké qu'un bloc désigne : photo ou document joint. */
+  function fichierDuBloc(bloc) {
+    if (bloc.type === 'image') return bloc.imageId || null;
+    if (bloc.type === 'document') return bloc.fichierId || null;
+    return null;
+  }
+
   const themes = {
     tous: () => lire('themes', 'getAll'),
 
@@ -120,12 +127,13 @@ const Store = (() => {
       return ecrire('themes', 'put', complet).then(() => complet);
     },
 
-    /** Supprime le thème et les photos qui n'appartenaient qu'à lui. */
+    /** Supprime le thème, ses photos et ses documents. */
     supprimer(id) {
       return themes.obtenir(id).then(theme => {
         const photos = (theme && theme.blocs || [])
-          .filter(b => b.type === 'image' && b.imageId)
-          .map(b => images.supprimer(b.imageId));
+          .map(fichierDuBloc)
+          .filter(Boolean)
+          .map(fichier => images.supprimer(fichier));
         return Promise.all(photos).then(() => ecrire('themes', 'delete', id));
       });
     },
@@ -141,6 +149,8 @@ const Store = (() => {
 
   /* ------------------------------------------------------------ photos --- */
 
+  // Le magasin « images » garde tous les fichiers de l'appareil : les photos,
+  // et aussi les documents joints (PDF, vidéo…), sous forme de Blob.
   const images = {
     ajouter(blob) {
       const enr = { id: identifiant(), blob, ajouteLe: maintenant() };
@@ -244,5 +254,5 @@ const Store = (() => {
   }
 
   return { ouvrir, domaines, themes, images, reglages, exporter, importer, vider,
-           etatSauvegarde, identifiant, maintenant };
+           etatSauvegarde, identifiant, maintenant, fichierDuBloc };
 })();

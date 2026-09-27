@@ -81,6 +81,14 @@ const Partage = (() => {
         blocs.push({ type: 'image', reference, legende: bloc.legende || '' });
         continue;
       }
+      if (bloc.type === 'document') {
+        // Un document voyage avec le fichier, jamais dans un lien.
+        if (!avecPhotos || !bloc.fichierId) continue;
+        const reference = 'f' + (Object.keys(photos).length + 1);
+        photos[reference] = bloc.fichierId;
+        blocs.push({ type: 'document', reference, titre: bloc.titre || '', nom: bloc.nom || '', idee: bloc.idee || '' });
+        continue;
+      }
       // Liste blanche : rien d'autre que ces champs ne sort de l'appareil,
       // et rien d'autre n'entre depuis un paquet reçu.
       const copie = { type: bloc.type };
@@ -127,10 +135,15 @@ const Partage = (() => {
     });
   }
 
-  /** Combien de photos seraient perdues dans un envoi sans photos. */
+  /** Combien de photos et de documents seraient perdus dans un envoi sans photos. */
   function comptePhotos(themes) {
     return themes.reduce((total, t) =>
       total + (t.blocs || []).filter(b => b.type === 'image' && b.imageId).length, 0);
+  }
+
+  function compteDocuments(themes) {
+    return themes.reduce((total, t) =>
+      total + (t.blocs || []).filter(b => b.type === 'document' && b.fichierId).length, 0);
   }
 
   /* ------------------------------------------------------------ lecture --- */
@@ -223,11 +236,12 @@ const Partage = (() => {
     return Promise.all(references.map(reference =>
       fetch(images[reference])
         .then(r => r.blob())
-        .then(blob => Store.images.ajouter(blob))
-        .then(imageId => ({ reference, imageId }))
+        .then(blob => Store.images.ajouter(blob)
+          .then(imageId => ({ reference, imageId, mime: blob.type, taille: blob.size })))
         .catch(() => ({ reference, imageId: null }))
     )).then(posees => {
       const parReference = new Map(posees.map(p => [p.reference, p.imageId]));
+      const detailsFichier = new Map(posees.map(p => [p.reference, p]));
       const depart = Date.now();
 
       return Promise.all(paquet.themes.map((theme, rang) => {
@@ -243,6 +257,16 @@ const Partage = (() => {
               continue; // photo absente du paquet : on saute le bloc
             }
             blocs.push({ id: Store.identifiant(), type: 'image', imageId, legende: bloc.legende || '' });
+            continue;
+          }
+          if (bloc.type === 'document') {
+            const fichierId = parReference.get(bloc.reference);
+            if (!fichierId) continue; // fichier absent du paquet : on saute le bloc
+            blocs.push({
+              id: Store.identifiant(), type: 'document', fichierId,
+              titre: String(bloc.titre || ''), nom: String(bloc.nom || ''), idee: String(bloc.idee || ''),
+              mime: detailsFichier.get(bloc.reference).mime, taille: detailsFichier.get(bloc.reference).taille
+            });
             continue;
           }
           blocs.push(Object.assign({ id: Store.identifiant() }, bloc));
@@ -267,11 +291,13 @@ const Partage = (() => {
       n + t.blocs.filter(b => b.type === type).length, 0);
     const ecritures = compter('ecriture');
     const medias = compter('media');
-    const photos = Object.keys(paquet.images || {}).length;
+    const documents = compter('document');
+    const photos = Math.max(0, Object.keys(paquet.images || {}).length - documents);
     const morceaux = [themes + (themes > 1 ? ' thèmes' : ' thème')];
     if (ecritures) morceaux.push(ecritures + (ecritures > 1 ? ' écritures' : ' écriture'));
     if (photos) morceaux.push(photos + (photos > 1 ? ' photos' : ' photo'));
-    if (medias) morceaux.push(medias + (medias > 1 ? ' documents' : ' document'));
+    if (documents) morceaux.push(documents + (documents > 1 ? ' documents' : ' document'));
+    if (medias) morceaux.push(medias + (medias > 1 ? ' liens' : ' lien'));
     return morceaux.join(' · ');
   }
 
@@ -282,5 +308,5 @@ const Partage = (() => {
   }
 
   return { fabriquer, encoder, decoder, lireFichier, installer, resumer,
-           lienPour, comptePhotos, verifier };
+           lienPour, comptePhotos, compteDocuments, verifier };
 })();
