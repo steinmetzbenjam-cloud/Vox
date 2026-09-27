@@ -48,10 +48,7 @@ const Vues = (() => {
    * N'accepte qu'une adresse sûre. Les paquets viennent parfois de tiers :
    * un « javascript: » glissé dans un bloc ne doit jamais devenir cliquable.
    */
-  function lienSur(url) {
-    const propre = String(url || '').trim();
-    return /^(https?:|jwlibrary:)/i.test(propre) ? propre : null;
-  }
+  const lienSur = MiseEnPage.lienSur;
 
   /** Découpe un texte libre et transforme les références rencontrées en liens. */
   function semerLiens(parent, texte) {
@@ -70,19 +67,13 @@ const Vues = (() => {
     }
   }
 
+  /** Texte mis en page (titres, gras, listes…), références bibliques cliquables. */
   function texteEnrichi(texte, classeParagraphe) {
-    const fragment = document.createDocumentFragment();
-    for (const bloc of String(texte || '').split(/\n{2,}/)) {
-      if (!bloc.trim()) continue;
-      const p = el('p.' + (classeParagraphe || 'para'));
-      const lignes = bloc.split('\n');
-      lignes.forEach((ligne, index) => {
-        if (index) p.appendChild(el('br'));
-        semerLiens(p, ligne);
-      });
-      fragment.appendChild(p);
-    }
-    return fragment;
+    return MiseEnPage.rendre(texte, {
+      classe: classeParagraphe || 'para',
+      semer: semerLiens,
+      agrandir: (src, legende) => agrandirPhoto({ url: src, legende })
+    });
   }
 
   function vide(message, action) {
@@ -442,6 +433,11 @@ const Vues = (() => {
           ])
         ]));
 
+        // Ce qu'un document importé n'a pas pu garder, dit franchement.
+        for (const avertissement of (paquet.avertissements || [])) {
+          zone.appendChild(el('p.aide.aide--alerte', { texte: avertissement }));
+        }
+
         // Pour un thème unique, la carte ci-dessus le nomme déjà.
         if (paquet.themes.length > 1) {
           zone.appendChild(el('ul.apercu', null, paquet.themes.map(t =>
@@ -487,11 +483,22 @@ const Vues = (() => {
       }
 
       function offrirSources() {
-        const choixFichier = el('input', { type: 'file', accept: 'application/json,.json', hidden: true });
+        const choixFichier = el('input', {
+          type: 'file',
+          multiple: true,
+          accept: 'application/json,.json,.docx,.md,.markdown,.txt,.html,.htm,text/*,image/*,'
+            + 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          hidden: true
+        });
         choixFichier.addEventListener('change', () => {
-          const fichier = choixFichier.files && choixFichier.files[0];
-          if (!fichier) return;
-          Partage.lireFichier(fichier).then(proposer).catch(echouer)
+          const fichiers = Array.from(choixFichier.files || []);
+          if (!fichiers.length) return;
+          // Un paquet Vox passe en priorité ; sinon, un document à convertir.
+          const paquet = fichiers.find(f => /\.json$/i.test(f.name) || f.type === 'application/json');
+          const lecture = paquet ? Partage.lireFichier(paquet) : Documents.lire(fichiers);
+          zone.innerHTML = '';
+          zone.appendChild(vide('Lecture du document…'));
+          lecture.then(proposer).catch(echouer)
             .then(() => { choixFichier.value = ''; });
         });
         zone.appendChild(choixFichier);
@@ -517,6 +524,11 @@ const Vues = (() => {
           })
         }, [icone('lien'), 'Coller un lien']));
 
+        zone.appendChild(el('p.aide', {
+          texte: 'Vox lit les thèmes Vox (.json) et les documents : Word (.docx), Markdown (.md), '
+            + 'page web (.html) ou texte. Titres, gras, couleurs, listes, tableaux, liens et images '
+            + 'sont conservés. Pour un Markdown ou une page web, choisissez ses images en même temps.'
+        }));
         zone.appendChild(el('p.aide', {
           texte: 'Un thème importé s\u2019ajoute : rien de ce que vous avez déjà n\u2019est remplacé.'
         }));
@@ -684,12 +696,14 @@ const Vues = (() => {
       const boite = el('blockquote.question');
       boite.appendChild(texteEnrichi(bloc.texte, 'question__texte'));
       // Ce qu'on espère entendre : un pense-bête, pas une phrase à lire.
-      if (bloc.attendu) boite.appendChild(el('p.question__attendu', { texte: bloc.attendu }));
+      if (bloc.attendu) boite.appendChild(texteEnrichi(bloc.attendu, 'question__attendu'));
       return boite;
     }
 
     if (bloc.type === 'media') {
       const adresse = lienSur(bloc.url);
+      const lecteur = adresse ? lecteurPour(adresse) : null;
+      if (lecteur) return rendreLecteur(bloc, adresse, lecteur);
       const dedans = [
         el('span.media__icone', null, [icone('media')]),
         el('span.media__texte', null, [
@@ -740,7 +754,7 @@ const Vues = (() => {
     if (bloc.type === 'image') {
       const figure = el('figure.figure');
       const image = el('img.figure__image', { alt: bloc.legende || 'Photo du texte' });
-      Photos.attacher(image, bloc.imageId);
+      afficherImage(image, bloc);
       image.addEventListener('click', () => agrandirPhoto(bloc));
       figure.appendChild(image);
       if (bloc.legende) figure.appendChild(el('figcaption.figure__legende', { texte: bloc.legende }));
@@ -752,9 +766,69 @@ const Vues = (() => {
     return boite;
   }
 
+  /** Une photo vient de l'appareil (imageId) ou d'une adresse en ligne (url). */
+  function afficherImage(balise, bloc) {
+    if (bloc.imageId) {
+      Photos.attacher(balise, bloc.imageId);
+      return;
+    }
+    const src = MiseEnPage.imageSure(bloc.url);
+    if (src) balise.src = src;
+  }
+
+  /**
+   * Ce qu'une adresse permet de lire sur place : vidéo YouTube ou Vimeo,
+   * fichier vidéo ou audio, image. null : une simple carte cliquable.
+   */
+  function lecteurPour(adresse) {
+    if (!/^https?:/i.test(adresse)) return null;
+    let m = adresse.match(/^https?:\/\/(?:www\.|m\.)?(?:youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/|live\/)|youtu\.be\/)([\w-]{11})/i);
+    if (m) return { genre: 'cadre', src: 'https://www.youtube-nocookie.com/embed/' + m[1] + '?rel=0&playsinline=1' };
+    m = adresse.match(/^https?:\/\/(?:www\.|player\.)?vimeo\.com\/(?:video\/)?(\d+)/i);
+    if (m) return { genre: 'cadre', src: 'https://player.vimeo.com/video/' + m[1] };
+    const chemin = adresse.split(/[?#]/)[0].toLowerCase();
+    if (/\.(mp4|m4v|mov|webm)$/.test(chemin)) return { genre: 'video', src: adresse };
+    if (/\.(mp3|m4a|aac|wav|ogg|oga)$/.test(chemin)) return { genre: 'audio', src: adresse };
+    if (/\.(jpe?g|png|gif|webp|avif)$/.test(chemin)) return { genre: 'image', src: adresse };
+    return null;
+  }
+
+  function rendreLecteur(bloc, adresse, lecteur) {
+    let support;
+    if (lecteur.genre === 'cadre') {
+      support = el('div.lecteur__boite', null, [
+        el('iframe.lecteur__cadre', {
+          src: lecteur.src,
+          title: bloc.titre || 'Vidéo',
+          loading: 'lazy',
+          allow: 'autoplay; encrypted-media; picture-in-picture; fullscreen',
+          allowfullscreen: true,
+          referrerpolicy: 'strict-origin-when-cross-origin'
+        })
+      ]);
+    } else if (lecteur.genre === 'video') {
+      support = el('video.lecteur__video', { src: lecteur.src, controls: true, playsinline: true, preload: 'metadata' });
+    } else if (lecteur.genre === 'audio') {
+      support = el('audio.lecteur__audio', { src: lecteur.src, controls: true, preload: 'metadata' });
+    } else {
+      support = el('img.figure__image', { src: lecteur.src, alt: bloc.titre || '', loading: 'lazy' });
+      support.addEventListener('click', () => agrandirPhoto({ url: lecteur.src, legende: bloc.titre }));
+    }
+    return el('figure.lecteur', null, [
+      support,
+      el('figcaption.lecteur__legende', null, [
+        bloc.titre ? el('span.lecteur__titre', { texte: bloc.titre }) : null,
+        bloc.idee ? el('span.lecteur__note', { texte: bloc.idee }) : null,
+        el('a.lecteur__ouvrir', {
+          href: adresse, target: '_blank', rel: 'noopener noreferrer'
+        }, ['Ouvrir', icone('externe')])
+      ])
+    ]);
+  }
+
   function agrandirPhoto(bloc) {
     const image = el('img.loupe__image', { alt: bloc.legende || '' });
-    Photos.attacher(image, bloc.imageId);
+    afficherImage(image, bloc);
     const panneau = UI.ouvrirModale([
       el('button.loupe__fermer', { type: 'button', 'aria-label': 'Fermer', onclick: UI.fermerModale }, [icone('croix')]),
       image
@@ -781,9 +855,217 @@ const Vues = (() => {
     { type: 'texte',    libelle: 'Texte',     glyphe: 'texte' },
     { type: 'ecriture', libelle: 'Écriture',  glyphe: 'livre' },
     { type: 'image',    libelle: 'Photo',     glyphe: 'photo' },
-    { type: 'media',    libelle: 'Vidéo, publication', glyphe: 'media' },
+    { type: 'media',    libelle: 'Vidéo, lien', glyphe: 'media' },
     { type: 'note',     libelle: 'Aparté',    glyphe: 'note' }
   ];
+
+  /* — barre de mise en forme d'un champ de texte — */
+
+  const PREFIXE_LIGNE = /^(#{1,6}\s+|\s*(?:[-*•+]|\d{1,3}[.)])\s+(?:\[[ xX]\]\s+)?|>\s?)/;
+
+  /**
+   * Barre posée au-dessus d'une zone de texte : elle écrit les marques de mise
+   * en page à la place de l'utilisateur. Le collage depuis Word, Pages ou une
+   * page web garde aussi titres, gras, listes, tableaux et liens.
+   */
+  function outilsTexte(zone) {
+    let debut = 0;
+    let fin = 0;
+    const noter = () => { debut = zone.selectionStart; fin = zone.selectionEnd; };
+    for (const ev of ['select', 'keyup', 'mouseup', 'touchend', 'input', 'focus']) {
+      zone.addEventListener(ev, noter);
+    }
+
+    function appliquer(valeur, a, b) {
+      zone.value = valeur;
+      zone.focus();
+      zone.setSelectionRange(a, b);
+      noter();
+      zone.dispatchEvent(new Event('input'));
+    }
+
+    function entourer(ouvre, ferme) {
+      const v = zone.value;
+      const a = debut;
+      const b = fin;
+      // Déjà entouré : on retire les marques.
+      if (v.slice(a - ouvre.length, a) === ouvre && v.slice(b, b + ferme.length) === ferme) {
+        appliquer(v.slice(0, a - ouvre.length) + v.slice(a, b) + v.slice(b + ferme.length),
+          a - ouvre.length, b - ouvre.length);
+        return;
+      }
+      const choisi = v.slice(a, b);
+      const coeur = choisi.trim();
+      if (!coeur) {
+        appliquer(v.slice(0, a) + ouvre + ferme + v.slice(b), a + ouvre.length, a + ouvre.length);
+        return;
+      }
+      const avant = choisi.match(/^\s*/)[0];
+      const apres = choisi.match(/\s*$/)[0];
+      const depart = a + avant.length + ouvre.length;
+      appliquer(v.slice(0, a) + avant + ouvre + coeur + ferme + apres + v.slice(b),
+        depart, depart + coeur.length);
+    }
+
+    function colorer(couleur) {
+      const v = zone.value;
+      let a = debut;
+      let b = fin;
+      // Une couleur déjà posée autour de la sélection est d'abord retirée.
+      const autour = v.slice(b).match(new RegExp('^\\]\\{(' + MiseEnPage.COULEURS.join('|') + ')\\}'));
+      let valeur = v;
+      if (v[a - 1] === '[' && autour) {
+        valeur = v.slice(0, a - 1) + v.slice(a, b) + v.slice(b + autour[0].length);
+        a -= 1;
+        b -= 1;
+      } else {
+        const choisi = v.slice(a, b).replace(/\[([^\]]+)\]\{[a-z]+\}/g, '$1');
+        valeur = v.slice(0, a) + choisi + v.slice(b);
+        b = a + choisi.length;
+      }
+      if (!couleur) {
+        appliquer(valeur, a, b);
+        return;
+      }
+      zone.value = valeur;
+      debut = a;
+      fin = b;
+      entourer('[', ']{' + couleur + '}');
+    }
+
+    function prefixer(prefixe) {
+      const v = zone.value;
+      const a = v.lastIndexOf('\n', debut - 1) + 1;
+      let b = v.indexOf('\n', fin);
+      if (b < 0) b = v.length;
+      const lignes = v.slice(a, b).split('\n');
+      const marque = rang => (prefixe === '1. ' ? (rang + 1) + '. ' : prefixe);
+      const deja = lignes.every((l, rang) => !l.trim() || (prefixe === '1. '
+        ? /^\s*\d{1,3}[.)]\s/.test(l) : l.startsWith(prefixe)));
+      let rang = 0;
+      const nouvelles = lignes.map(l => {
+        if (!l.trim()) return l;
+        const nue = l.replace(PREFIXE_LIGNE, '');
+        return deja ? nue : marque(rang++) + nue;
+      });
+      const bloc = nouvelles.join('\n');
+      appliquer(v.slice(0, a) + bloc + v.slice(b), a, a + bloc.length);
+    }
+
+    function inserer(texte) {
+      const v = zone.value;
+      const avant = debut && v[debut - 1] !== '\n' ? '\n' : '';
+      const apres = v[fin] && v[fin] !== '\n' ? '\n' : '';
+      const ajout = avant + texte + apres;
+      appliquer(v.slice(0, debut) + ajout + v.slice(fin), debut + ajout.length, debut + ajout.length);
+    }
+
+    function lien() {
+      const [a, b] = [debut, fin];
+      UI.demander('Adresse du lien', 'https://', {
+        repere: 'https://www.jw.org/…',
+        aide: 'Le texte sélectionné deviendra cliquable.'
+      }).then(adresse => {
+        const sure = adresse && lienSur(adresse);
+        if (!sure) {
+          if (adresse) UI.annoncer('Adresse non valable (https://…)', 'erreur');
+          return;
+        }
+        debut = a;
+        fin = b;
+        if (a === b) {
+          const v = zone.value;
+          appliquer(v.slice(0, a) + sure + v.slice(b), a, a + sure.length);
+        } else {
+          entourer('[', '](' + sure.replace(/\)/g, '%29').replace(/ /g, '%20') + ')');
+        }
+      });
+    }
+
+    function image() {
+      const [a, b] = [debut, fin];
+      UI.demander('Adresse de l’image', 'https://', {
+        repere: 'https://…/image.jpg',
+        aide: 'Une image en ligne, placée dans le texte. Pour une photo de l’appareil, ajoutez plutôt un bloc Photo.'
+      }).then(adresse => {
+        const sure = adresse && MiseEnPage.imageSure(adresse);
+        if (!sure) {
+          if (adresse) UI.annoncer('Adresse non valable (https://…)', 'erreur');
+          return;
+        }
+        debut = a;
+        fin = b;
+        inserer('![](' + sure.replace(/\)/g, '%29').replace(/ /g, '%20') + ')');
+      });
+    }
+
+    // Aperçu : le rendu final, sous la zone, mis à jour à la frappe.
+    const apercu = el('div.apercu-texte', { hidden: true });
+    const dessinerApercu = () => {
+      if (apercu.hidden) return;
+      apercu.innerHTML = '';
+      apercu.appendChild(texteEnrichi(zone.value, 'para'));
+    };
+    zone.addEventListener('input', dessinerApercu);
+
+    const couleurs = el('div.outils__couleurs', { hidden: true }, [
+      ...MiseEnPage.COULEURS.map(c => el('button.pastille.pastille--' + c, {
+        type: 'button', 'aria-label': c, title: c,
+        onclick: () => { couleurs.hidden = true; colorer(c); }
+      })),
+      el('button.pastille.pastille--aucune', {
+        type: 'button', 'aria-label': 'Sans couleur', title: 'Sans couleur',
+        onclick: () => { couleurs.hidden = true; colorer(null); }
+      })
+    ]);
+
+    const outil = (contenu, libelle, action, classe) => {
+      const bouton = el('button.outil' + (classe ? '.' + classe : ''), {
+        type: 'button', 'aria-label': libelle, title: libelle,
+        onclick: action
+      }, contenu);
+      // Garder la sélection : sur ordinateur, le clic ne vole pas le focus.
+      bouton.addEventListener('mousedown', ev => ev.preventDefault());
+      return bouton;
+    };
+
+    const boutonApercu = outil(['Aperçu'], 'Voir le rendu', () => {
+      apercu.hidden = !apercu.hidden;
+      boutonApercu.classList.toggle('outil--actif', !apercu.hidden);
+      dessinerApercu();
+    }, 'outil--mot');
+
+    const barre = el('div.outils', null, [
+      outil(['Titre'], 'Titre', () => prefixer('# '), 'outil--mot'),
+      outil(['Sous-titre'], 'Sous-titre', () => prefixer('## '), 'outil--mot'),
+      outil([el('b', { texte: 'G' })], 'Gras', () => entourer('**', '**')),
+      outil([el('i', { texte: 'I' })], 'Italique', () => entourer('*', '*')),
+      outil([el('u', { texte: 'S' })], 'Souligné', () => entourer('++', '++')),
+      outil([el('s', { texte: 'ab' })], 'Barré', () => entourer('~~', '~~')),
+      outil([el('mark.mp-surligne', { texte: 'ab' })], 'Surligner', () => entourer('==', '==')),
+      outil([el('span.outil__couleur', { texte: 'A' })], 'Couleur', () => { couleurs.hidden = !couleurs.hidden; }),
+      outil(['•'], 'Liste à puces', () => prefixer('- ')),
+      outil(['1.'], 'Liste numérotée', () => prefixer('1. ')),
+      outil(['❝'], 'Citation', () => prefixer('> ')),
+      outil([icone('lien')], 'Lien', lien),
+      outil([icone('photo')], 'Image en ligne', image),
+      boutonApercu
+    ]);
+
+    // Collage riche : la mise en forme d'origine est convertie, pas perdue.
+    zone.addEventListener('paste', ev => {
+      const donnees = ev.clipboardData;
+      const html = donnees && donnees.getData('text/html');
+      if (!html) return;
+      const converti = MiseEnPage.depuisHtml(html, { imagesEmbarquees: false });
+      if (!converti.trim()) return;
+      ev.preventDefault();
+      zone.setRangeText(converti, zone.selectionStart, zone.selectionEnd, 'end');
+      zone.dispatchEvent(new Event('input'));
+    });
+
+    return { barre: el('div.outils__cadre', null, [barre, couleurs]), apercu };
+  }
 
   function editeur(conteneur, id) {
     return Store.themes.obtenir(id).then(brouillon => {
@@ -948,9 +1230,9 @@ const Vues = (() => {
 
         } else if (bloc.type === 'image') {
           const apercu = el('div.bloc__photo');
-          if (bloc.imageId) {
+          if (bloc.imageId || MiseEnPage.imageSure(bloc.url)) {
             const image = el('img', { alt: '' });
-            Photos.attacher(image, bloc.imageId);
+            afficherImage(image, bloc);
             apercu.appendChild(image);
           }
           const choix = el('input', { type: 'file', accept: 'image/*', hidden: true });
@@ -962,6 +1244,7 @@ const Vues = (() => {
               .then(imageId => {
                 const ancien = bloc.imageId;
                 bloc.imageId = imageId;
+                delete bloc.url;
                 enregistrer();
                 dessinerBlocs();
                 if (ancien) Store.images.supprimer(ancien);
@@ -975,6 +1258,20 @@ const Vues = (() => {
             texte: bloc.imageId ? 'Remplacer la photo' : 'Choisir une photo',
             onclick: () => choix.click()
           }));
+          if (!bloc.imageId) {
+            // Ou une image en ligne, sans rien stocker sur l'appareil.
+            const champUrl = el('input.champ', {
+              type: 'url', placeholder: '… ou l’adresse d’une image en ligne (https://…)',
+              autocapitalize: 'off', spellcheck: 'false'
+            });
+            champUrl.value = bloc.url || '';
+            champUrl.addEventListener('change', () => {
+              bloc.url = champUrl.value.trim();
+              enregistrer();
+              dessinerBlocs();
+            });
+            corps.appendChild(champUrl);
+          }
           corps.appendChild(zoneTexte(bloc.legende, 'Légende (facultatif)', v => {
             bloc.legende = v;
             enregistrer();
@@ -989,7 +1286,7 @@ const Vues = (() => {
           });
 
           const avis = el('span.bloc__apercu');
-          const champUrl = el('input.champ', { type: 'url', placeholder: 'https://www.jw.org/…', autocapitalize: 'off', spellcheck: 'false' });
+          const champUrl = el('input.champ', { type: 'url', placeholder: 'https://… (YouTube, vidéo .mp4, jw.org, article)', autocapitalize: 'off', spellcheck: 'false' });
           champUrl.value = bloc.url || '';
           const verifierUrl = () => {
             if (!champUrl.value.trim()) {
@@ -997,8 +1294,16 @@ const Vues = (() => {
               avis.className = 'bloc__apercu';
               return;
             }
-            const bon = !!lienSur(champUrl.value);
-            avis.textContent = bon ? 'Adresse valide' : 'Seules les adresses http, https et jwlibrary sont ouvertes.';
+            const bon = lienSur(champUrl.value);
+            const lecteur = bon && lecteurPour(bon);
+            const genres = {
+              cadre: 'Vidéo lue directement dans Vox',
+              video: 'Vidéo lue directement dans Vox',
+              audio: 'Son lu directement dans Vox',
+              image: 'Image affichée dans Vox'
+            };
+            avis.textContent = !bon ? 'Seules les adresses http, https et jwlibrary sont ouvertes.'
+              : lecteur ? genres[lecteur.genre] : 'Lien valide — affiché en carte cliquable';
             avis.className = 'bloc__apercu' + (bon ? ' bloc__apercu--bon' : ' bloc__apercu--flou');
           };
           champUrl.addEventListener('input', () => {
@@ -1022,10 +1327,14 @@ const Vues = (() => {
             note: 'Un rappel pour vous-même',
             texte: 'Le raisonnement. Les références écrites ici deviennent cliquables.'
           };
-          corps.appendChild(zoneTexte(bloc.texte, reperes[bloc.type] || reperes.texte, v => {
+          const zone = zoneTexte(bloc.texte, reperes[bloc.type] || reperes.texte, v => {
             bloc.texte = v;
             enregistrer();
-          }));
+          });
+          const outils = outilsTexte(zone);
+          corps.appendChild(outils.barre);
+          corps.appendChild(zone);
+          corps.appendChild(outils.apercu);
           if (bloc.type === 'question') {
             corps.appendChild(zoneTexte(bloc.attendu, 'Réponse attendue, relance (facultatif)', v => {
               bloc.attendu = v;

@@ -24,20 +24,67 @@ Un thème se compose de blocs qu'on empile dans l'ordre voulu :
 | Bloc | À quoi il sert |
 |---|---|
 | **Question** | L'objection ou la question posée, mise en évidence |
-| **Texte** | Le raisonnement. Les références écrites dedans deviennent cliquables |
+| **Texte** | Le raisonnement, mis en page (titres, gras, couleurs, listes, tableaux). Les références écrites dedans deviennent cliquables |
 | **Écriture** | Une référence isolée, avec l'idée à retenir |
-| **Photo** | Une photo du texte, d'une publication, d'une note manuscrite |
-| **Vidéo, publication** | Un titre et une adresse : vidéo jw.org, article, lien JW Library |
+| **Photo** | Une photo de l'appareil, ou une image en ligne par son adresse |
+| **Vidéo, lien** | Un titre et une adresse. YouTube, Vimeo, un fichier vidéo ou audio, une image : lus directement dans Vox. Le reste (jw.org, article, JW Library) : une carte cliquable |
 | **Aparté** | Un rappel pour soi : « ne pas enchaîner trop vite » |
 
 Un bloc **Question** accepte une *réponse attendue* facultative, affichée en
 petit sous la question. C'est ce qui permet de préparer une partie coopérative :
 la question se lit à voix haute, la réponse reste un pense-bête.
 
-Les adresses d'un bloc **Vidéo, publication** ne sont ouvertes que si elles
+Les adresses d'un bloc **Vidéo, lien** ne sont ouvertes que si elles
 commencent par `http:`, `https:` ou `jwlibrary:`. Un paquet reçu de quelqu'un
 d'autre ne peut donc pas glisser une adresse exécutable : la carte s'affiche,
 mais elle reste inerte.
+
+## La mise en page
+
+Les blocs **Texte**, **Question** et **Aparté** ont une barre d'outils : titre,
+sous-titre, **G**ras, *I*talique, **S**ouligné, barré, surligné, couleur,
+listes, citation, lien, image en ligne, et **Aperçu** pour voir le rendu.
+
+La barre écrit pour vous quelques signes, proches du Markdown, qu'on peut aussi
+taper à la main :
+
+| On écrit | On obtient |
+|---|---|
+| `# Titre` · `## Sous-titre` · `### Intertitre` | Titres de trois tailles |
+| `**gras**` · `*italique*` · `++souligné++` · `~~barré~~` | Mise en forme du texte |
+| `==surligné==` | Surlignage |
+| `[texte]{rouge}` | Couleur : `rouge`, `orange`, `vert`, `bleu`, `violet`, `gris` |
+| `[texte](https://…)` | Lien |
+| `![légende](https://…/image.jpg)` | Image en ligne, sur sa propre ligne |
+| `- point` · `1. point` · `- [ ] à faire` | Listes (deux espaces devant pour un sous-niveau) |
+| `> citation` · `---` | Citation, trait de séparation |
+| `\| a \| b \|` puis `\|---\|---\|` | Tableau (la première ligne devient l'en-tête) |
+
+Les couleurs suivent le mode clair ou sombre : un rouge reste lisible sur fond
+noir. Aucun HTML n'est jamais interprété — un paquet reçu ne peut rien glisser
+d'autre que ces signes.
+
+**Coller garde la mise en page.** Un texte copié depuis Word, Pages, Google Docs
+ou une page web arrive avec ses titres, son gras, ses couleurs, ses listes, ses
+tableaux et ses liens.
+
+## Importer un document
+
+**Importer un thème → Choisir un fichier** accepte aussi des documents, qui
+deviennent un thème en gardant leur mise en page :
+
+- **Word (.docx)** : titres (styles Titre 1, 2, 3), gras, italique, souligné,
+  barré, couleurs, surlignage, listes, tableaux, liens et images ;
+- **Markdown (.md)** : c'est déjà la syntaxe de Vox ;
+- **page web (.html)** et **texte (.txt)**.
+
+Le premier titre devient le titre du thème. Chaque grande partie (titre de
+premier ou deuxième niveau) devient un bloc Texte, et chaque image un bloc
+Photo, ce qui permet de réorganiser ensuite. Les images d'un Markdown ou d'une
+page web enregistrée sont des fichiers à côté du document : sélectionnez-les en
+même temps que lui. Ce qui n'a pas pu être repris (image introuvable, format
+EMF ou TIFF) est signalé avant l'import. Pour un document Pages, exportez-le
+d'abord en Word.
 
 ## Les références bibliques
 
@@ -131,8 +178,11 @@ Règles :
 - `ecriture` prend une `reference` en clair et une `idee` facultative.
 - `media` prend un `titre`, une `url` (`http:`, `https:` ou `jwlibrary:`
   uniquement) et une `idee` facultative.
-- `image` pointe vers une clé de l'objet `images` par son champ `reference`.
+- `image` pointe vers une clé de l'objet `images` par son champ `reference`,
+  ou vers une image en ligne par un champ `url` (`https:`).
   Un bloc image dont la photo manque est simplement ignoré à l'import.
+- `texte`, `question`, `note` et `attendu` acceptent la mise en page décrite
+  plus haut.
 - `images` peut être omis. Les identifiants, eux, ne doivent **pas** figurer :
   l'application les attribue elle-même.
 
@@ -201,7 +251,7 @@ mode hors ligne (le service worker exige `http://` ou `https://`).
 
 ## Organisation du code
 
-Pas de framework, pas d'étape de compilation, pas de dépendance. Six fichiers
+Pas de framework, pas d'étape de compilation, pas de dépendance. Des fichiers
 JavaScript chargés dans l'ordre :
 
 ```
@@ -214,6 +264,8 @@ js/store.js             IndexedDB : domaines, thèmes, photos, réglages, export
 js/seed.js              les thèmes de départ (posés au premier lancement)
 js/partage.js           paquets de thèmes : fabrication, lien compressé, import
 js/ui.js                éléments, icônes, modales, notifications
+js/mise-en-page.js      mise en page des textes, conversion depuis du HTML
+js/documents.js         import de documents Word, Markdown, HTML, texte
 js/vues.js              les écrans
 js/app.js               état, photos, routeur, démarrage
 assets/                 icônes

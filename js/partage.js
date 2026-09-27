@@ -70,6 +70,11 @@ const Partage = (() => {
     const blocs = [];
     for (const bloc of (theme.blocs || [])) {
       if (bloc.type === 'image') {
+        // Une image en ligne voyage par son adresse, même dans un lien.
+        if (!bloc.imageId && MiseEnPage.imageSure(bloc.url) && /^https?:/i.test(bloc.url)) {
+          blocs.push({ type: 'image', url: bloc.url, legende: bloc.legende || '' });
+          continue;
+        }
         if (!avecPhotos || !bloc.imageId) continue; // sans photo, le bloc n'a plus d'objet
         const reference = 'p' + (Object.keys(photos).length + 1);
         photos[reference] = bloc.imageId;
@@ -230,7 +235,13 @@ const Partage = (() => {
         for (const bloc of theme.blocs) {
           if (bloc.type === 'image') {
             const imageId = parReference.get(bloc.reference);
-            if (!imageId) continue; // photo absente du paquet : on saute le bloc
+            if (!imageId) {
+              const adresse = MiseEnPage.imageSure(bloc.url);
+              if (adresse && /^https?:/i.test(adresse)) {
+                blocs.push({ id: Store.identifiant(), type: 'image', url: adresse, legende: bloc.legende || '' });
+              }
+              continue; // photo absente du paquet : on saute le bloc
+            }
             blocs.push({ id: Store.identifiant(), type: 'image', imageId, legende: bloc.legende || '' });
             continue;
           }
