@@ -233,7 +233,30 @@ Gardez le même endroit à chaque fois, le nom du fichier porte la date.
 
 Pour restaurer : `Réglages → Restaurer une sauvegarde`. Le sélecteur de fichiers
 d'iOS sait aller chercher dans Dropbox et iCloud Drive si ces applications sont
-installées. C'est aussi ainsi qu'on passe d'un téléphone à un autre.
+installées.
+
+### Synchroniser deux appareils
+
+`Réglages → Synchroniser…` ouvre un écran calqué sur celui de l'application
+Horizon :
+
+- **Appareils à proximité** — « Envoyer à un appareil… » prépare un fichier
+  complet (domaines, thèmes, photos, documents et réglages) et ouvre la feuille
+  de partage : AirDrop y montre les appareils voisins.
+- **Sur l'appareil qui reçoit** — « Ouvrir le fichier reçu » (Fichiers →
+  Téléchargements). Vox affiche une carte *Sauvegarde reçue* : appareil
+  d'origine, date, nombre de thèmes, de domaines et de fichiers. **Remplacer
+  mes données**, après confirmation, efface tout et le remplace. L'appareil qui
+  envoie n'est pas modifié.
+
+Horizon, application native, trouve seul l'appareil voisin et lui envoie la
+base en direct. Une page web n'a accès ni au Bluetooth ni au Wi-Fi direct : sans
+serveur, les données passent forcément par un fichier, et AirDrop est le chemin
+le plus court.
+
+Avant d'effacer quoi que ce soit, Vox vérifie que le fichier est bien une
+sauvegarde complète : un paquet de thèmes partagés, choisi par erreur, est
+refusé sans rien toucher. C'est vrai aussi pour « Restaurer une sauvegarde ».
 
 Il n'y a **pas** de synchronisation automatique, et c'est délibéré : un OAuth
 Dropbox suppose une application développeur, une clé, et des jetons qui expirent.

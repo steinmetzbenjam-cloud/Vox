@@ -185,21 +185,39 @@ const Store = (() => {
     return fetch(donnees).then(r => r.blob());
   }
 
-  /** Export complet, photos comprises, dans un seul fichier JSON. */
+  /** Export complet, photos, documents et réglages compris, dans un seul fichier JSON. */
   function exporter() {
-    return Promise.all([domaines.tous(), themes.tous(), lire('images', 'getAll')])
-      .then(([lesDomaines, lesThemes, lesImages]) =>
-        Promise.all(lesImages.map(i =>
-          blobVersTexte(i.blob).then(donnees => ({ id: i.id, donnees, ajouteLe: i.ajouteLe }))
-        )).then(imagesEncodees => ({
-          application: 'vox',
-          version: 1,
-          exporteLe: maintenant(),
-          domaines: lesDomaines,
-          themes: lesThemes,
-          images: imagesEncodees
-        }))
-      );
+    return Promise.all([
+      domaines.tous(), themes.tous(), lire('images', 'getAll'),
+      reglages.obtenir('cible', 'app'), reglages.obtenir('taille', 1)
+    ]).then(([lesDomaines, lesThemes, lesImages, cible, taille]) =>
+      Promise.all(lesImages.map(i =>
+        blobVersTexte(i.blob).then(donnees => ({ id: i.id, donnees, ajouteLe: i.ajouteLe }))
+      )).then(imagesEncodees => ({
+        application: 'vox',
+        version: 1,
+        exporteLe: maintenant(),
+        domaines: lesDomaines,
+        themes: lesThemes,
+        images: imagesEncodees,
+        reglages: { cible, taille }
+      }))
+    );
+  }
+
+  /** Une sauvegarde complète, et pas un simple paquet de thèmes partagés. */
+  function estSauvegarde(donnees) {
+    return !!donnees && donnees.application === 'vox' && donnees.type !== 'partage' &&
+      Array.isArray(donnees.domaines) && Array.isArray(donnees.themes);
+  }
+
+  /** Lève une erreur explicite si `donnees` n'est pas une sauvegarde complète. */
+  function verifierSauvegarde(donnees) {
+    if (!donnees || donnees.application !== 'vox') throw new Error('Ce fichier ne vient pas de Vox.');
+    if (donnees.type === 'partage') {
+      throw new Error('Ce fichier contient des thèmes partagés, pas une sauvegarde complète. Passez par « Importer un thème » dans un domaine.');
+    }
+    if (!estSauvegarde(donnees)) throw new Error('Ce fichier n’est pas une sauvegarde complète de Vox.');
   }
 
   /**
@@ -207,8 +225,12 @@ const Store = (() => {
    * `remplacer` vide la base au préalable ; sinon le contenu est fusionné.
    */
   function importer(donnees, remplacer) {
-    if (!donnees || donnees.application !== 'vox') {
-      return Promise.reject(new Error('Ce fichier ne vient pas de Vox.'));
+    // Vérifié avant de vider quoi que ce soit : un paquet de thèmes choisi
+    // par erreur ne doit jamais effacer l'appareil.
+    try {
+      verifierSauvegarde(donnees);
+    } catch (erreur) {
+      return Promise.reject(erreur);
     }
     const depart = remplacer ? vider() : Promise.resolve();
     return depart
@@ -218,6 +240,16 @@ const Store = (() => {
       )))
       .then(() => Promise.all((donnees.domaines || []).map(d => ecrire('domaines', 'put', d))))
       .then(() => Promise.all((donnees.themes || []).map(t => ecrire('themes', 'put', t))))
+      .then(() => {
+        // Les réglages voyagent aussi, s'ils sont présents et plausibles.
+        const r = donnees.reglages || {};
+        const poses = [];
+        if (r.cible === 'app' || r.cible === 'web') poses.push(reglages.definir('cible', r.cible));
+        if (typeof r.taille === 'number' && r.taille >= 0.9 && r.taille <= 1.5) {
+          poses.push(reglages.definir('taille', r.taille));
+        }
+        return Promise.all(poses);
+      })
       .then(() => ({
         domaines: (donnees.domaines || []).length,
         themes: (donnees.themes || []).length,
@@ -253,6 +285,6 @@ const Store = (() => {
       });
   }
 
-  return { ouvrir, domaines, themes, images, reglages, exporter, importer, vider,
+  return { ouvrir, domaines, themes, images, reglages, exporter, importer, estSauvegarde, verifierSauvegarde, vider,
            etatSauvegarde, identifiant, maintenant, fichierDuBloc };
 })();

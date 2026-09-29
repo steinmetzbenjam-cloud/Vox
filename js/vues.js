@@ -1943,6 +1943,212 @@ const Vues = (() => {
     return quand + ' ' + etat.enRetard + (etat.enRetard > 1 ? ' thèmes modifiés' : ' thème modifié') + ' depuis.';
   }
 
+  /* =====================================================================
+   *  Un fichier complet : sauvegarde et synchronisation
+   * ===================================================================== */
+
+  /** Un nom lisible pour l'appareil d'origine : le navigateur ne donne pas le vrai. */
+  function nomAppareil() {
+    const ua = navigator.userAgent;
+    if (/iPad/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) return 'iPad';
+    if (/iPhone|iPod/.test(ua)) return 'iPhone';
+    if (/Android/.test(ua)) return 'appareil Android';
+    if (/Macintosh|Mac OS X/.test(ua)) return 'Mac';
+    if (/Windows/.test(ua)) return 'PC';
+    return 'appareil';
+  }
+
+  const aujourdhui = () => new Date().toISOString().slice(0, 10);
+
+  /**
+   * Prépare tout de suite le fichier complet. Safari n'autorise
+   * navigator.share() que dans la foulée immédiate d'une pression : le
+   * bouton ne doit plus rien avoir à attendre au moment du geste.
+   */
+  function preparerExport() {
+    const etat = { pret: null };
+    etat.promesse = Store.exporter().then(donnees => {
+      donnees.appareil = nomAppareil();
+      etat.pret = { contenu: JSON.stringify(donnees, null, 2) };
+      return etat.pret;
+    }).catch(() => null);
+    return etat;
+  }
+
+  function telechargerJson(contenu, nom) {
+    const lien = el('a', {
+      href: URL.createObjectURL(new Blob([contenu], { type: 'application/json' })),
+      download: nom
+    });
+    document.body.appendChild(lien);
+    lien.click();
+    document.body.removeChild(lien);
+    setTimeout(() => URL.revokeObjectURL(lien.href), 4000);
+  }
+
+  /**
+   * Envoie le fichier complet par la feuille de partage (AirDrop, Messages…),
+   * ou le télécharge. `apres(true)` : partagé ; `apres(false)` : téléchargé.
+   */
+  function envoyerExport(exportFichier, nom, titre, apres) {
+    const lancer = pret => {
+      if (!pret) {
+        UI.annoncer('Fichier impossible à préparer', 'erreur');
+        return;
+      }
+      const fichier = new File([pret.contenu], nom, { type: 'application/json' });
+      const repli = () => { telechargerJson(pret.contenu, nom); return apres(false); };
+      if (navigator.canShare && navigator.canShare({ files: [fichier] })) {
+        navigator.share({ files: [fichier], title: titre })
+          .then(() => apres(true))
+          .catch(erreur => {
+            // L'utilisateur a fermé la feuille : ce n'est pas un échec.
+            if (erreur && erreur.name === 'AbortError') return;
+            repli();
+          });
+        return;
+      }
+      repli();
+    };
+    // Prêt dans l'immense majorité des cas ; sinon on attend, quitte à
+    // retomber sur le téléchargement si le geste a expiré entre-temps.
+    if (exportFichier.pret) lancer(exportFichier.pret);
+    else exportFichier.promesse.then(lancer);
+  }
+
+  /** Lit un fichier complet et résume ce qu'il contient, sans rien modifier. */
+  function lireSauvegarde(fichier) {
+    return fichier.text().then(texte => {
+      let donnees;
+      try { donnees = JSON.parse(texte); } catch (e) { throw new Error('Fichier illisible : ce n’est pas un fichier Vox.'); }
+      Store.verifierSauvegarde(donnees);
+      const themes = donnees.themes.length;
+      const domaines = donnees.domaines.length;
+      const fichiers = (donnees.images || []).length;
+      const date = donnees.exporteLe ? new Date(donnees.exporteLe) : null;
+      return {
+        donnees,
+        resume: {
+          origine: donnees.appareil || null,
+          date: date && !isNaN(date) ? date.toLocaleString('fr-FR', {
+            day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
+          }) : null,
+          contenu: [
+            themes + (themes > 1 ? ' thèmes' : ' thème'),
+            domaines + (domaines > 1 ? ' domaines' : ' domaine'),
+            fichiers ? fichiers + (fichiers > 1 ? ' photos et documents' : ' photo ou document') : null
+          ].filter(Boolean).join(' · ')
+        }
+      };
+    });
+  }
+
+  function decrireResume(resume) {
+    const entete = [resume.origine ? 'Depuis un ' + resume.origine : 'Sauvegarde', resume.date]
+      .filter(Boolean).join(' — ');
+    return entete + ' : ' + resume.contenu;
+  }
+
+  /** Remplace tout le contenu de l'appareil, applique les réglages reçus, revient à l'accueil. */
+  function remplacerDonnees(donnees) {
+    return Store.importer(donnees, true)
+      .then(bilan => Promise.all([Store.reglages.obtenir('cible', 'app'), Store.reglages.obtenir('taille', 1)])
+        .then(([cible, taille]) => {
+          Etat.cible = cible;
+          Etat.taille = taille;
+          document.documentElement.style.setProperty('--echelle', taille);
+          UI.annoncer('Données remplacées : ' + bilan.themes + (bilan.themes > 1 ? ' thèmes' : ' thème'));
+          location.hash = '#/';
+          Routeur.rafraichir();
+          return bilan;
+        }));
+  }
+
+  /** Un sélecteur de fichier JSON caché ; renvoie la fonction qui l'ouvre. */
+  function choisirFichierJson(conteneur, action) {
+    const choix = el('input', { type: 'file', accept: 'application/json,.json', hidden: true });
+    choix.addEventListener('change', () => {
+      const fichier = choix.files && choix.files[0];
+      if (fichier) Promise.resolve(action(fichier)).then(() => { choix.value = ''; });
+    });
+    conteneur.appendChild(choix);
+    return () => choix.click();
+  }
+
+  /* =====================================================================
+   *  Synchroniser — comme dans Horizon : envoyer tout Vox à un appareil
+   *  proche, qui remplace son contenu après avoir vu ce qu'il reçoit.
+   * ===================================================================== */
+
+  function synchroniser(conteneur) {
+    conteneur.appendChild(entete({
+      retour: () => { location.hash = '#/reglages'; },
+      titre: 'Synchroniser'
+    }));
+
+    const exportFichier = preparerExport();
+    const statut = el('div.synchro__statut');
+
+    function carte(genre, titre, lignes, action) {
+      statut.innerHTML = '';
+      statut.appendChild(el('div.synchro__carte.synchro__carte--' + genre, null, [
+        el('p.synchro__titre', null, [genre === 'erreur' ? null : icone('check'), titre]),
+        ...lignes.filter(Boolean).map(l => el('p.synchro__ligne', { texte: l })),
+        action || null
+      ]));
+      statut.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
+    /* — appareils à proximité — */
+    conteneur.appendChild(el('h2.section', { texte: 'Appareils à proximité' }));
+    conteneur.appendChild(el('button.bouton.bouton--plein.bouton--large', {
+      type: 'button',
+      onclick: () => envoyerExport(
+        exportFichier,
+        'vox-' + nomAppareil().replace(/\s+/g, '-') + '-' + aujourdhui() + '.json',
+        'Synchronisation Vox',
+        partage => carte('envoye', partage ? 'Envoyé' : 'Fichier enregistré', [
+          partage
+            ? 'Sur l’autre appareil, touchez « Ouvrir le fichier reçu » ci-dessous.'
+            : 'Transmettez ce fichier à l’autre appareil, puis ouvrez-le avec « Ouvrir le fichier reçu ».'
+        ])
+      )
+    }, [icone('envoyer'), 'Envoyer à un appareil…']));
+    conteneur.appendChild(el('p.aide', {
+      texte: 'Ouvrez Vox sur l’autre appareil. Dans la feuille de partage, touchez AirDrop puis l’appareil voulu : Wi-Fi et Bluetooth allumés des deux côtés, appareils proches l’un de l’autre.'
+    }));
+
+    /* — réception — */
+    conteneur.appendChild(el('h2.section', { texte: 'Sur l’appareil qui reçoit' }));
+    conteneur.appendChild(statut);
+    const ouvrir = choisirFichierJson(conteneur, fichier => lireSauvegarde(fichier)
+      .then(({ donnees, resume }) => carte('recu', 'Sauvegarde reçue', [
+        [resume.origine ? 'Depuis un ' + resume.origine : null, resume.date].filter(Boolean).join(' — '),
+        resume.contenu
+      ], el('button.bouton.bouton--danger.bouton--large', {
+        type: 'button',
+        onclick: () => UI.confirmer(
+          'Remplacer les données de cet appareil ?',
+          decrireResume(resume) + '. Tout ce qui se trouve ici sera effacé et remplacé.',
+          'Remplacer'
+        ).then(oui => (oui ? remplacerDonnees(donnees) : null))
+          .catch(erreur => carte('erreur', 'Synchronisation impossible', [erreur.message]))
+      }, ['Remplacer mes données'])))
+      .catch(erreur => carte('erreur', 'Synchronisation impossible', [erreur.message || 'Fichier illisible'])));
+    conteneur.appendChild(el('button.bouton.bouton--discret.bouton--large', {
+      type: 'button', onclick: ouvrir
+    }, [icone('televerser'), 'Ouvrir le fichier reçu']));
+    conteneur.appendChild(el('p.aide', {
+      texte: 'Le fichier arrivé par AirDrop se trouve dans Fichiers → Téléchargements. Vox montre ce qu’il contient avant de toucher à quoi que ce soit.'
+    }));
+
+    conteneur.appendChild(el('p.aide.synchro__note', {
+      texte: 'La sauvegarde reçue remplace le contenu de cet appareil : domaines, thèmes, photos, documents et réglages. L’appareil qui envoie n’est pas modifié. Pour une copie de secours, passez par Réglages → Sauvegarde.'
+    }));
+
+    return Promise.resolve();
+  }
+
   function reglages(conteneur) {
     conteneur.appendChild(entete({
       retour: () => { location.hash = '#/'; },
@@ -1988,6 +2194,17 @@ const Vues = (() => {
     conteneur.appendChild(curseur);
     conteneur.appendChild(exemple);
 
+    const exportFichier = preparerExport();
+
+    /* — synchroniser — */
+    conteneur.appendChild(el('h2.section', { texte: 'Synchroniser' }));
+    conteneur.appendChild(el('p.aide', {
+      texte: 'Envoie tout Vox — domaines, thèmes, photos, documents et réglages — à un autre appareil proche, qui remplace son contenu par le vôtre.'
+    }));
+    conteneur.appendChild(el('button.bouton.bouton--plein.bouton--large', {
+      type: 'button', onclick: () => { location.hash = '#/synchroniser'; }
+    }, [icone('envoyer'), 'Synchroniser…']));
+
     /* — sauvegarde — */
     conteneur.appendChild(el('h2.section', { texte: 'Sauvegarde' }));
 
@@ -2002,17 +2219,6 @@ const Vues = (() => {
       texte: 'Vos préparations ne vivent que sur cet appareil. Le fichier exporté contient tout, photos comprises, et se restaure sur n’importe quel téléphone.'
     }));
 
-    // Safari n'autorise navigator.share() que dans la foulée immédiate d'une
-    // pression. On prépare donc le fichier dès l'ouverture de cet écran, pour
-    // que le bouton n'ait plus rien à attendre au moment du geste.
-    let fichierPret = null;
-    const preparation = Store.exporter().then(donnees => {
-      const contenu = JSON.stringify(donnees, null, 2);
-      const nom = 'vox-' + new Date().toISOString().slice(0, 10) + '.json';
-      fichierPret = { contenu, nom, fichier: new File([contenu], nom, { type: 'application/json' }) };
-      return fichierPret;
-    }).catch(() => null);
-
     function marquerFait() {
       return Store.reglages.definir('derniereSauvegarde', Store.maintenant())
         .then(() => Store.etatSauvegarde())
@@ -2022,72 +2228,25 @@ const Vues = (() => {
         });
     }
 
-    function telecharger(pret) {
-      const lien = el('a', {
-        href: URL.createObjectURL(new Blob([pret.contenu], { type: 'application/json' })),
-        download: pret.nom
-      });
-      document.body.appendChild(lien);
-      lien.click();
-      document.body.removeChild(lien);
-      setTimeout(() => URL.revokeObjectURL(lien.href), 4000);
-      return marquerFait().then(() => UI.annoncer('Sauvegarde enregistrée'));
-    }
-
     conteneur.appendChild(el('button.bouton.bouton--plein.bouton--large', {
       type: 'button',
-      onclick: () => {
-        const lancer = pret => {
-          if (!pret) {
-            UI.annoncer('Sauvegarde impossible à préparer', 'erreur');
-            return;
-          }
-          if (navigator.canShare && navigator.canShare({ files: [pret.fichier] })) {
-            navigator.share({ files: [pret.fichier], title: 'Sauvegarde Vox' })
-              .then(marquerFait)
-              .catch(erreur => {
-                // L'utilisateur a fermé la feuille : ce n'est pas un échec.
-                if (erreur && erreur.name === 'AbortError') return;
-                telecharger(pret);
-              });
-            return;
-          }
-          telecharger(pret);
-        };
-        // Prêt dans l'immense majorité des cas ; sinon on attend, quitte à
-        // retomber sur le téléchargement si le geste a expiré entre-temps.
-        if (fichierPret) lancer(fichierPret);
-        else preparation.then(lancer);
-      }
+      onclick: () => envoyerExport(exportFichier, 'vox-' + aujourdhui() + '.json', 'Sauvegarde Vox',
+        partage => marquerFait().then(() => { if (partage === false) UI.annoncer('Sauvegarde enregistrée'); }))
     }, [icone('envoyer'), 'Sauvegarder…']));
 
     conteneur.appendChild(el('p.aide', {
       texte: 'Choisissez Dropbox, iCloud Drive, Fichiers, Mail — la destination que vous voulez. Gardez le même endroit à chaque fois.'
     }));
 
-    const choixFichier = el('input', { type: 'file', accept: 'application/json,.json', hidden: true });
-    choixFichier.addEventListener('change', () => {
-      const fichier = choixFichier.files && choixFichier.files[0];
-      if (!fichier) return;
-      fichier.text()
-        .then(texte => JSON.parse(texte))
-        .then(donnees => UI.confirmer(
-          'Restaurer cette sauvegarde ?',
-          'Le contenu actuel sera remplacé par celui du fichier.',
-          'Restaurer'
-        ).then(oui => (oui ? Store.importer(donnees, true) : null)))
-        .then(bilan => {
-          if (!bilan) return;
-          UI.annoncer(bilan.themes + ' thèmes restaurés');
-          location.hash = '#/';
-          Routeur.rafraichir();
-        })
-        .catch(erreur => UI.annoncer(erreur.message || 'Fichier illisible', 'erreur'))
-        .then(() => { choixFichier.value = ''; });
-    });
-    conteneur.appendChild(choixFichier);
+    const restaurer = choisirFichierJson(conteneur, fichier => lireSauvegarde(fichier)
+      .then(({ donnees, resume }) => UI.confirmer(
+        'Restaurer cette sauvegarde ?',
+        decrireResume(resume) + '. Tout ce qui se trouve sur cet appareil sera effacé et remplacé.',
+        'Tout remplacer'
+      ).then(oui => (oui ? remplacerDonnees(donnees) : null)))
+      .catch(erreur => UI.annoncer(erreur.message || 'Fichier illisible', 'erreur')));
     conteneur.appendChild(el('button.bouton.bouton--discret.bouton--large', {
-      type: 'button', onclick: () => choixFichier.click()
+      type: 'button', onclick: restaurer
     }, [icone('televerser'), 'Restaurer une sauvegarde']));
 
     conteneur.appendChild(el('p.aide', {
@@ -2125,6 +2284,6 @@ const Vues = (() => {
     return morceaux.join(' · ');
   }
 
-  return { accueil, domaine, theme, editeur, recherche, reglages, importer,
+  return { accueil, domaine, theme, editeur, recherche, reglages, synchroniser, importer,
            partagerThemes, basculerImmersion };
 })();
