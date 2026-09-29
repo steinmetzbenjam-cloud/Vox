@@ -21,6 +21,10 @@ de l'appareil**. Elle s'installe sur l'écran d'accueil et fonctionne hors ligne
 - Le **crayon rond**, en bas à droite, suit la lecture : il ouvre l'éditeur
   directement sur le bloc qu'on avait sous les yeux, et **Terminé** ramène au
   même endroit. Dans l'éditeur, l'en-tête reste visible en haut de l'écran.
+  Juste à côté, le bouton **☰** ramène à la liste des thèmes du domaine.
+- Dans cette liste, **faire glisser un thème vers la gauche** découvre
+  « Supprimer » ; le glisser jusqu'au bout le supprime directement. Une
+  confirmation est toujours demandée.
 
 Un thème se compose de blocs qu'on empile dans l'ordre voulu :
 

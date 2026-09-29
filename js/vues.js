@@ -287,7 +287,7 @@ const Vues = (() => {
           });
 
           for (const t of ordonnes) {
-            liste.appendChild(el('div.fiche', null, [
+            const fiche = el('div.fiche', null, [
               el('button.fiche__corps', {
                 type: 'button', onclick: () => { location.hash = '#/t/' + t.id; }
               }, [
@@ -303,8 +303,24 @@ const Vues = (() => {
                   Store.themes.enregistrer(t).then(dessinerListe);
                 }
               }, [icone('etoile')])
-            ]));
+            ]);
+            liste.appendChild(glissiere(fiche, () => supprimerTheme(t)));
           }
+        }
+
+        function supprimerTheme(t) {
+          return UI.confirmer(
+            'Supprimer « ' + t.titre + ' » ?',
+            'La préparation, ses photos et ses documents seront perdus.'
+          ).then(oui => {
+            if (!oui) return false;
+            return Store.themes.supprimer(t.id).then(() => {
+              themes.splice(themes.indexOf(t), 1);
+              dessinerListe();
+              UI.annoncer('Thème supprimé');
+              return true;
+            });
+          });
         }
 
         if (situations.length) {
@@ -347,6 +363,104 @@ const Vues = (() => {
           onclick: () => { location.hash = '#/importer/' + id; }
         }, [icone('televerser'), 'Importer un thème']));
       });
+  }
+
+  /**
+   * Une fiche qu'on fait glisser vers la gauche pour découvrir « Supprimer ».
+   * Le défilement vertical reste libre : le geste n'est pris qu'une fois
+   * clairement horizontal. Glisser jusqu'au bout supprime aussitôt (après
+   * confirmation).
+   */
+  const LARGEUR_ACTION = 92;
+  let glissiereOuverte = null;
+
+  function glissiere(fiche, supprimer) {
+    const bouton = el('button.glissiere__action', {
+      type: 'button', tabindex: -1, 'aria-hidden': 'true',
+      onclick: () => { fermer(); supprimer(); }
+    }, [icone('poubelle'), el('span', { texte: 'Supprimer' })]);
+    const cadre = el('div.glissiere', null, [bouton, fiche]);
+
+    let decalage = 0;
+    let depart = null; // { x, y, decalage, sens }
+    let avaleClic = false;
+    let masquage = null;
+
+    function poser(valeur, anime) {
+      decalage = valeur;
+      fiche.classList.toggle('fiche--anime', !!anime);
+      fiche.style.transform = valeur ? 'translateX(' + valeur + 'px)' : '';
+      const ouverte = valeur < 0;
+      // Le rouge n'existe que pendant le geste : au repos, rien ne dépasse des coins.
+      clearTimeout(masquage);
+      if (ouverte) cadre.classList.add('glissiere--active');
+      else masquage = setTimeout(() => cadre.classList.remove('glissiere--active'), anime ? 240 : 0);
+      bouton.tabIndex = ouverte ? 0 : -1;
+      bouton.setAttribute('aria-hidden', ouverte ? 'false' : 'true');
+    }
+
+    function ouvrir() {
+      if (glissiereOuverte && glissiereOuverte !== fermer) glissiereOuverte();
+      glissiereOuverte = fermer;
+      poser(-LARGEUR_ACTION, true);
+    }
+
+    function fermer() {
+      if (glissiereOuverte === fermer) glissiereOuverte = null;
+      poser(0, true);
+    }
+
+    fiche.addEventListener('pointerdown', ev => {
+      if (ev.pointerType === 'mouse' && ev.button !== 0) return;
+      // Sur iOS, un glissement n'est suivi d'aucun clic : on repart de zéro.
+      avaleClic = false;
+      if (glissiereOuverte && glissiereOuverte !== fermer) glissiereOuverte();
+      depart = { x: ev.clientX, y: ev.clientY, decalage, sens: null, id: ev.pointerId };
+    });
+
+    fiche.addEventListener('pointermove', ev => {
+      if (!depart || ev.pointerId !== depart.id) return;
+      const dx = ev.clientX - depart.x;
+      const dy = ev.clientY - depart.y;
+      if (!depart.sens) {
+        if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+        depart.sens = Math.abs(dx) > Math.abs(dy) ? 'horizontal' : 'vertical';
+        if (depart.sens === 'horizontal') fiche.setPointerCapture(ev.pointerId);
+      }
+      if (depart.sens !== 'horizontal') return;
+      const largeur = fiche.offsetWidth;
+      poser(Math.max(-largeur, Math.min(0, depart.decalage + dx)), false);
+    });
+
+    function lacher(ev) {
+      if (!depart || ev.pointerId !== depart.id) return;
+      const glisse = depart.sens === 'horizontal';
+      depart = null;
+      if (!glisse) return;
+      avaleClic = true; // le geste ne doit pas ouvrir le thème
+      if (decalage < -fiche.offsetWidth * 0.6) {
+        poser(-fiche.offsetWidth, true);
+        Promise.resolve(supprimer()).then(fait => { if (!fait) fermer(); });
+      } else if (decalage < -LARGEUR_ACTION / 2) {
+        ouvrir();
+      } else {
+        fermer();
+      }
+    }
+    fiche.addEventListener('pointerup', lacher);
+    fiche.addEventListener('pointercancel', lacher);
+
+    // Un toucher sur une fiche ouverte la referme au lieu d'ouvrir le thème.
+    fiche.addEventListener('click', ev => {
+      if (avaleClic || decalage < 0) {
+        ev.stopPropagation();
+        ev.preventDefault();
+        if (!avaleClic) fermer();
+      }
+      avaleClic = false;
+    }, true);
+
+    return cadre;
   }
 
   /* =====================================================================
@@ -685,9 +799,15 @@ const Vues = (() => {
         Etat.blocVise = blocEnVue(conteneur, leTheme);
         location.hash = '#/t/' + id + '/modifier';
       }
-      conteneur.appendChild(el('button.crayon-flottant', {
-        type: 'button', 'aria-label': 'Modifier ici', title: 'Modifier ici', onclick: modifierIci
-      }, [icone('crayon')]));
+      conteneur.appendChild(el('div.flottants', null, [
+        el('button.flottant.flottant--second', {
+          type: 'button', 'aria-label': 'Retour à la liste des thèmes', title: 'Retour à la liste des thèmes',
+          onclick: () => { location.hash = '#/d/' + leTheme.domaineId; }
+        }, [icone('liste')]),
+        el('button.flottant', {
+          type: 'button', 'aria-label': 'Modifier ici', title: 'Modifier ici', onclick: modifierIci
+        }, [icone('crayon')])
+      ]));
 
       const lecture = el('article.lecture');
       lecture.appendChild(el('h1.lecture__titre', { texte: leTheme.titre }));

@@ -346,6 +346,47 @@ h1, h2, h3 { font-weight: 600; letter-spacing: -.01em; }
   cursor: pointer;
 }
 
+/* Glisser une fiche vers la gauche découvre « Supprimer ». */
+.glissiere {
+  position: relative;
+  border-radius: var(--rayon);
+  box-shadow: var(--ombre);
+  overflow: hidden;
+}
+
+.glissiere:not(.glissiere--active) .glissiere__action { visibility: hidden; }
+
+.glissiere__action {
+  position: absolute;
+  inset: 0 0 0 auto;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 4px;
+  padding: 0 22px;
+  border: 0;
+  background: var(--danger);
+  color: #fff;
+  font: inherit;
+  font-size: .74rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.glissiere__action .ic { width: 22px; height: 22px; }
+
+.glissiere .fiche {
+  position: relative;
+  box-shadow: none;
+  touch-action: pan-y;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.fiche--anime { transition: transform .22s ease; }
+
 .fiche__titre { font-family: var(--serif); font-size: 1.08rem; font-weight: 600; line-height: 1.3; }
 .fiche__note  { color: var(--doux); font-size: .88rem; }
 .fiche__meta  { margin-top: 5px; color: var(--doux); font-size: .76rem; letter-spacing: .02em; }
@@ -1303,13 +1344,19 @@ body.immersif .lecture__titre { font-size: calc(2rem * var(--echelle)); }
 
 .visionneuse__avis .ic { width: 40px; height: 40px; }
 
-/* ------------------------------------------------------- crayon flottant --- */
+/* ------------------------------------------ boutons flottants de lecture --- */
 
-.crayon-flottant {
+.flottants {
   position: fixed;
   right: max(18px, env(safe-area-inset-right));
   bottom: calc(20px + env(safe-area-inset-bottom));
   z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.flottant {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1322,11 +1369,21 @@ body.immersif .lecture__titre { font-size: calc(2rem * var(--echelle)); }
   cursor: pointer;
 }
 
-.crayon-flottant .ic { width: 22px; height: 22px; }
+.flottant .ic { width: 22px; height: 22px; }
 
-body.immersif .crayon-flottant { display: none; }
+.flottant--second {
+  width: 46px; height: 46px;
+  border: 1px solid var(--bord);
+  background: var(--carte);
+  color: var(--accent);
+  box-shadow: 0 3px 12px rgba(0, 0, 0, .16);
+}
 
-@media print { .crayon-flottant { display: none; } }
+.flottant--second .ic { width: 20px; height: 20px; }
+
+body.immersif .flottants { display: none; }
+
+@media print { .flottants { display: none; } }
 
 /* Le bloc qu'on venait de lire, repéré à l'arrivée dans l'éditeur. */
 .bloc--vise { animation: bloc-vise 1.6s ease-out; }
