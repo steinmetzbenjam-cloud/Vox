@@ -265,6 +265,13 @@ Chrome propose **Installer l'application** dans son menu.
 
 Le dépôt ne contient que des fichiers statiques : il n'y a rien à compiler.
 
+**À chaque mise en ligne**, augmenter `VERSION` (et `DATE_VERSION`) en tête de
+`sw.js`. C'est ce qui fait se mettre à jour les téléphones, et ce numéro
+s'affiche en bas des **Réglages** : on voit ainsi quelle version tourne sur
+l'appareil. Si une version plus récente a été téléchargée pendant qu'on
+utilisait Vox, les Réglages le signalent aussi ; elle s'installe à la
+prochaine ouverture.
+
 **GitHub Pages** — `Settings` → `Pages` → Source : `Deploy from a branch`,
 branche `main`, dossier `/ (root)`. L'adresse est publiée en une minute.
 

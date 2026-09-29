@@ -4,7 +4,12 @@
  * en sous-sol. Tout le nécessaire est mis en cache à l'installation.
  */
 
-const CACHE = 'vox-v7';
+// Le numéro de version, affiché en bas des Réglages. À augmenter à chaque
+// mise en ligne : c'est aussi ce qui déclenche la mise à jour des téléphones.
+const VERSION = '8';
+const DATE_VERSION = '2026-09-29';
+
+const CACHE = 'vox-v' + VERSION;
 
 const COQUILLE = [
   './',
@@ -44,6 +49,13 @@ self.addEventListener('activate', evenement => {
       .then(noms => Promise.all(noms.filter(n => n !== CACHE).map(n => caches.delete(n))))
       .then(() => self.clients.claim())
   );
+});
+
+// Les Réglages demandent quelle version est réellement installée.
+self.addEventListener('message', evenement => {
+  if (evenement.data === 'version' && evenement.ports[0]) {
+    evenement.ports[0].postMessage({ version: VERSION, date: DATE_VERSION });
+  }
 });
 
 self.addEventListener('fetch', evenement => {

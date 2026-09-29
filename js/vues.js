@@ -2098,7 +2098,31 @@ const Vues = (() => {
       texte: 'Vox — préparer en silence ce qui sera dit à voix haute.'
     }));
 
+    /* — numéro de version, pour suivre les mises à jour — */
+    const ligneVersion = el('p.version', { texte: 'Version…' });
+    const ligneAttente = el('p.version.version--attente', { hidden: true });
+    conteneur.appendChild(ligneVersion);
+    conteneur.appendChild(ligneAttente);
+    Version.lire().then(({ enCours, enAttente }) => {
+      ligneVersion.textContent = enCours ? decrireVersion(enCours) : 'Version inconnue';
+      if (enAttente) {
+        ligneAttente.textContent = 'Nouvelle version téléchargée (' + decrireVersion(enAttente) +
+          ') : fermez complètement Vox et rouvrez-la pour l’utiliser.';
+        ligneAttente.hidden = false;
+      }
+    });
+
     return Promise.resolve();
+  }
+
+  function decrireVersion(v) {
+    const morceaux = ['Version ' + v.version];
+    const m = String(v.date || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (m) {
+      const jour = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+      morceaux.push(jour.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }));
+    }
+    return morceaux.join(' · ');
   }
 
   return { accueil, domaine, theme, editeur, recherche, reglages, importer,
