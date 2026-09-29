@@ -4,7 +4,7 @@
  * en sous-sol. Tout le nécessaire est mis en cache à l'installation.
  */
 
-const CACHE = 'vox-v6';
+const CACHE = 'vox-v7';
 
 const COQUILLE = [
   './',
