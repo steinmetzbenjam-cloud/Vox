@@ -65,6 +65,58 @@ const Photos = (() => {
   return { attacher, liberer, reduire };
 })();
 
+/* --------------------------------------------------------------- version --- */
+
+/**
+ * Quelle version de Vox tourne sur cet appareil ?
+ * Le numéro vit dans sw.js. Le service worker qui a servi la page au
+ * démarrage est interrogé tout de suite : c'est la version du code en cours.
+ * S'il est remplacé pendant la session, une version plus récente attend
+ * simplement la prochaine ouverture.
+ */
+const Version = (() => {
+  let enCours = null;
+  let enAttente = null;
+  const sw = 'serviceWorker' in navigator ? navigator.serviceWorker : null;
+
+  function demander(travailleur) {
+    return new Promise(resoudre => {
+      if (!travailleur) { resoudre(null); return; }
+      const canal = new MessageChannel();
+      const delai = setTimeout(() => resoudre(null), 2000);
+      canal.port1.onmessage = ev => { clearTimeout(delai); resoudre(ev.data); };
+      travailleur.postMessage('version', [canal.port2]);
+    });
+  }
+
+  // Sans service worker (premier lancement, ouverture en file://), on lit le
+  // numéro directement dans sw.js.
+  function lireFichier() {
+    return fetch('sw.js', { cache: 'no-store' })
+      .then(r => r.text())
+      .then(texte => {
+        const version = texte.match(/const VERSION = '([^']+)'/);
+        const date = texte.match(/const DATE_VERSION = '([^']+)'/);
+        return version ? { version: version[1], date: date ? date[1] : null } : null;
+      })
+      .catch(() => null);
+  }
+
+  const pret = demander(sw && sw.controller)
+    .then(v => v || lireFichier())
+    .then(v => { enCours = v; });
+
+  if (sw) {
+    sw.addEventListener('controllerchange', () => {
+      demander(sw.controller).then(v => {
+        if (v && enCours && v.version !== enCours.version) enAttente = v;
+      });
+    });
+  }
+
+  return { lire: () => pret.then(() => ({ enCours, enAttente })) };
+})();
+
 /* --------------------------------------------------------------- routeur --- */
 
 const Routeur = (() => {
