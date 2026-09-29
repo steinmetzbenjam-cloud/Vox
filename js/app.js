@@ -128,6 +128,7 @@ const Routeur = (() => {
     { motif: /^#\/importer$/,               rendre: (c) => Vues.importer(c, null, null) },
     { motif: /^#\/importer\/([^/]+)$/,      rendre: (c, m) => Vues.importer(c, m[1], null) },
     { motif: /^#\/reglages$/,               rendre: (c) => Vues.reglages(c) },
+    { motif: /^#\/synchroniser$/,           rendre: (c) => Vues.synchroniser(c) },
     { motif: /^#\/d\/([^/]+)$/,             rendre: (c, m) => Vues.domaine(c, m[1]) },
     { motif: /^#\/t\/([^/]+)\/modifier$/,   rendre: (c, m) => Vues.editeur(c, m[1]) },
     { motif: /^#\/t\/([^/]+)$/,             rendre: (c, m) => Vues.theme(c, m[1]) }

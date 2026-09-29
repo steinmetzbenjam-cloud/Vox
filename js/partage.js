@@ -198,7 +198,7 @@ const Partage = (() => {
     if (paquet.application !== MARQUE) refuser('Ce fichier ne vient pas de Vox.');
     if (paquet.type !== TYPE) {
       if (Array.isArray(paquet.domaines)) {
-        refuser('Ceci est une sauvegarde complète. Passez par Réglages → Restaurer une sauvegarde.');
+        refuser('Ceci est une sauvegarde complète. Passez par Réglages → Recevoir un transfert, ou Restaurer une sauvegarde.');
       }
       refuser('Ce fichier ne contient pas de thème à importer.');
     }
