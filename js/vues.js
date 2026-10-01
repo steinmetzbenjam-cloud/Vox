@@ -325,6 +325,7 @@ const Vues = (() => {
 
         if (situations.length) {
           const barre = el('div.filtres');
+          const cadre = el('div.filtres-cadre', null, [barre]);
           const poser = (libelle, valeur) => {
             const bouton = el('button.filtre', {
               type: 'button',
@@ -341,7 +342,37 @@ const Vues = (() => {
           };
           poser('Tout', null);
           situations.forEach(s => poser(s, s));
-          conteneur.appendChild(barre);
+
+          // Repliée, la barre tient sur deux lignes ; au-delà, un bouton la déplie.
+          let deplie = false;
+          const bascule = el('button.filtres__bascule', {
+            type: 'button',
+            onclick: () => { deplie = !deplie; ajuster(); }
+          });
+          bascule.hidden = true;
+          cadre.appendChild(bascule);
+          function ajuster() {
+            barre.style.maxHeight = '';
+            const puces = [...barre.children];
+            const lignes = [...new Set(puces.map(b => b.offsetTop))].sort((a, b) => a - b);
+            const deborde = lignes.length > 2;
+            const cachees = deborde ? puces.filter(b => b.offsetTop > lignes[1]).length : 0;
+            if (deborde && !deplie) {
+              const fin = Math.max(...puces.filter(b => b.offsetTop === lignes[1])
+                .map(b => b.offsetTop + b.offsetHeight));
+              barre.style.maxHeight = fin + 'px';
+            }
+            barre.classList.toggle('filtres--replie', deborde && !deplie);
+            bascule.hidden = !deborde;
+            bascule.textContent = deplie ? 'Moins' : '+ ' + cachees + ' autre' + (cachees > 1 ? 's' : '');
+            bascule.setAttribute('aria-expanded', String(deplie));
+          }
+          conteneur.appendChild(cadre);
+          requestAnimationFrame(ajuster);
+          let largeur = 0;
+          if (window.ResizeObserver) new ResizeObserver(([e]) => {
+            if (e.contentRect.width !== largeur) { largeur = e.contentRect.width; ajuster(); }
+          }).observe(cadre);
         }
 
         dessinerListe();
