@@ -28,7 +28,7 @@
 
   --surligne:  #fbe8a6;
 
-  /* Soulignements faits en lisant : un trait de feutre sous les mots. */
+  /* Soulignements faits en lisant : un surligneur sur toute la hauteur des mots. */
   --sl-jaune:  rgba(242, 201, 40, .6);
   --sl-vert:   rgba(86, 178, 110, .45);
   --sl-bleu:   rgba(72, 148, 214, .42);
@@ -1470,7 +1470,7 @@ body.immersif .flottants { display: none; }
 
 mark.souligne {
   color: inherit;
-  background: linear-gradient(transparent 58%, var(--sl) 58%);
+  background: var(--sl);
   -webkit-box-decoration-break: clone;
   box-decoration-break: clone;
   cursor: pointer;
