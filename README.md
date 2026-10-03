@@ -54,10 +54,27 @@ Un thème se compose de blocs qu'on empile dans l'ordre voulu :
 | **Document** | Un fichier de l'appareil : PDF, image, vidéo, son, Word… Le toucher l'ouvre en plein écran |
 | **Vidéo, lien** | Un titre et une adresse. YouTube, Vimeo, un fichier vidéo ou audio, une image : lus directement dans Vox. Le reste (jw.org, article, JW Library) : une carte cliquable |
 | **Aparté** | Un rappel pour soi : « ne pas enchaîner trop vite » |
+| **Paragraphe d'étude** | Un paragraphe de *La Tour de Garde* : sa question, son numéro, son texte, sa note |
 
 Un bloc **Question** accepte une *réponse attendue* facultative, affichée en
 petit sous la question. C'est ce qui permet de préparer une partie coopérative :
 la question se lit à voix haute, la réponse reste un pense-bête.
+
+## Les études de La Tour de Garde
+
+Une étude préparée avec Claude (compétence `vox-format`, à partir du fichier
+EPUB du numéro téléchargé sur jw.org) arrive avec **l'article entier** :
+cantiques, texte thème, « En bref », intertitres, encadrés, images et
+légendes, « Que répondrais-tu ? ». Chaque paragraphe est un bloc à part,
+nettement détaché : la question imprimée dans un cartouche, le numéro en
+pastille, le texte, et la note de bas de page s'il y en a. La préparation
+(idée centrale, commentaires, apartés) s'intercale entre ces blocs.
+
+**Toucher un passage biblique** ouvre une bulle avec le texte du verset ;
+toucher à côté la referme. « Ouvrir », dans la bulle, mène à JW Library.
+Une référence qui en réunit plusieurs (« Daniel 6:4, 5, 24 ») montre tous les
+versets cités. Les références dont le thème ne porte pas le texte ouvrent
+JW Library directement, comme ailleurs dans Vox.
 
 ## Les documents joints
 
@@ -137,7 +154,9 @@ Toute référence écrite en clair est reconnue et devient un lien qui ouvre
 
 Les 66 livres sont reconnus, avec leurs abréviations courantes et sans
 obligation d'accentuer : `Matthieu 24:14`, `Mt 24:14`, `Eccl. 9:5`,
-`1 Cor 15:3, 4`, `Revelation 21:3-5`, `Chant de Salomon 8:6`…
+`1 Cor 15:3, 4`, `Revelation 21:3-5`, `Chant de Salomon 8:6`… Les livres d'un
+seul chapitre s'écrivent aussi sans chapitre : `3 Jean 3, 4`, `Jude 21`,
+`Philémon 10`.
 
 Le lien produit suit le format JW Library :
 
@@ -214,8 +233,13 @@ quelqu'un d'autre :
 
 Règles :
 
-- Les sept types de blocs sont `question`, `texte`, `ecriture`, `image`,
-  `document`, `media`, `note`.
+- Les huit types de blocs sont `question`, `texte`, `ecriture`, `image`,
+  `document`, `media`, `note`, `paragraphe`.
+- `paragraphe` prend un `texte`, et facultativement un `numero`, la
+  `question` imprimée et une `note` de bas de page.
+- Un thème peut porter `versets` : `[{ "reference": "1 Tim. 2:3, 4",
+  "texte": "…" }]` (et `complete`, la référence entière si `reference`
+  n'en est qu'un morceau). Toucher ces références ouvre la bulle.
 - `question`, `texte` et `note` ont un champ `texte`. Les références écrites
   dedans deviennent cliquables toutes seules. `question` accepte en plus un
   champ `attendu` : la réponse espérée, affichée discrètement.

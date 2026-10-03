@@ -92,7 +92,7 @@ const Partage = (() => {
       // Liste blanche : rien d'autre que ces champs ne sort de l'appareil,
       // et rien d'autre n'entre depuis un paquet reçu.
       const copie = { type: bloc.type };
-      for (const champ of ['texte', 'reference', 'idee', 'attendu', 'titre', 'url']) {
+      for (const champ of ['texte', 'reference', 'idee', 'attendu', 'titre', 'url', 'numero', 'question', 'note']) {
         if (bloc[champ]) copie[champ] = bloc[champ];
       }
       blocs.push(copie);
@@ -101,8 +101,21 @@ const Partage = (() => {
       titre: theme.titre,
       soustitre: theme.soustitre || '',
       situations: (theme.situations || []).slice(),
-      blocs
+      blocs,
+      versets: versetsSurs(theme.versets)
     };
+  }
+
+  /** Le texte des versets cités : des chaînes, rien d'autre. */
+  function versetsSurs(liste) {
+    if (!Array.isArray(liste)) return [];
+    return liste
+      .filter(v => v && typeof v.texte === 'string' && typeof v.reference === 'string')
+      .map(v => {
+        const sur = { reference: v.reference, texte: v.texte };
+        if (typeof v.complete === 'string') sur.complete = v.complete;
+        return sur;
+      });
   }
 
   /**
@@ -278,6 +291,7 @@ const Partage = (() => {
           soustitre: theme.soustitre || '',
           situations: (theme.situations || []).slice(),
           blocs,
+          versets: versetsSurs(theme.versets),
           ordre: depart + rang
         });
       }));
@@ -290,10 +304,12 @@ const Partage = (() => {
     const compter = type => paquet.themes.reduce((n, t) =>
       n + t.blocs.filter(b => b.type === type).length, 0);
     const ecritures = compter('ecriture');
+    const paragraphes = compter('paragraphe');
     const medias = compter('media');
     const documents = compter('document');
     const photos = Math.max(0, Object.keys(paquet.images || {}).length - documents);
     const morceaux = [themes + (themes > 1 ? ' thèmes' : ' thème')];
+    if (paragraphes) morceaux.push(paragraphes + (paragraphes > 1 ? ' paragraphes' : ' paragraphe'));
     if (ecritures) morceaux.push(ecritures + (ecritures > 1 ? ' écritures' : ' écriture'));
     if (photos) morceaux.push(photos + (photos > 1 ? ' photos' : ' photo'));
     if (documents) morceaux.push(documents + (documents > 1 ? ' documents' : ' document'));
