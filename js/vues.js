@@ -830,7 +830,7 @@ const Vues = (() => {
         Etat.blocVise = blocEnVue(conteneur, leTheme);
         location.hash = '#/t/' + id + '/modifier';
       }
-      conteneur.appendChild(el('div.flottants', null, [
+      const flottants = el('div.flottants', null, [
         el('button.flottant.flottant--second', {
           type: 'button', 'aria-label': 'Retour à la liste des thèmes', title: 'Retour à la liste des thèmes',
           onclick: () => { location.hash = '#/d/' + leTheme.domaineId; }
@@ -838,7 +838,8 @@ const Vues = (() => {
         el('button.flottant', {
           type: 'button', 'aria-label': 'Modifier ici', title: 'Modifier ici', onclick: modifierIci
         }, [icone('crayon')])
-      ]));
+      ]);
+      conteneur.appendChild(flottants);
 
       const lecture = el('article.lecture');
       lecture.appendChild(el('h1.lecture__titre', { texte: leTheme.titre }));
@@ -867,6 +868,7 @@ const Vues = (() => {
       });
 
       conteneur.appendChild(lecture);
+      soulignage(conteneur, lecture, flottants, leTheme);
 
       // Retour de l'éditeur : on revient au bloc qu'on était en train de modifier.
       const rang = rangVise(leTheme);
@@ -896,6 +898,229 @@ const Vues = (() => {
         ]));
       });
     });
+  }
+
+  /* — soulignements — */
+
+  const COULEURS_SOULIGNE = ['jaune', 'vert', 'bleu', 'rose', 'orange', 'violet'];
+
+  // Les espaces seuls entre deux paragraphes ou deux cases de tableau ne
+  // s'enveloppent pas : seul le texte qu'on lit se souligne.
+  const CONTENANTS = /^(UL|OL|LI|TABLE|THEAD|TBODY|TR|DIV|BLOCKQUOTE|ASIDE|FIGURE|ARTICLE)$/;
+
+  /**
+   * Souligner à la main, en lisant. On sélectionne du doigt comme pour copier,
+   * une palette apparaît en bas de l'écran ; toucher un passage déjà souligné
+   * permet d'en changer la couleur ou de l'effacer.
+   *
+   * Un soulignement vit dans le thème, rattaché à son bloc :
+   * { bloc, debut, fin, couleur, texte }. `debut` et `fin` comptent les
+   * caractères du texte affiché du bloc ; `texte` permet de le retrouver si
+   * le bloc a été modifié depuis.
+   */
+  function soulignage(conteneur, lecture, flottants, leTheme) {
+    const noeuds = () => [...lecture.querySelectorAll(':scope > [data-rang]')];
+    const blocDe = noeud => (leTheme.blocs || [])[Number(noeud.dataset.rang)];
+    const cleDe = bloc => bloc.id;
+
+    let enAttente = null;   // [{ bloc, debut, fin }] : la sélection en cours
+    let touche = null;      // le soulignement touché du doigt
+    let minuterie = null;
+
+    function liste() { return leTheme.soulignes || (leTheme.soulignes = []); }
+
+    /* Pose les marques. Un passage introuvable (bloc supprimé, texte
+       réécrit) est écarté ; il disparaîtra au prochain enregistrement. */
+    function dessiner() {
+      for (const noeud of noeuds()) {
+        noeud.querySelectorAll('mark.souligne').forEach(m => m.replaceWith(...m.childNodes));
+        noeud.normalize();
+      }
+      const parBloc = new Map(noeuds().map(n => [cleDe(blocDe(n)), n]));
+      leTheme.soulignes = liste().filter(s => {
+        const noeud = parBloc.get(s.bloc);
+        if (!noeud) return false;
+        const texte = noeud.textContent;
+        if (texte.slice(s.debut, s.fin) !== s.texte) {
+          const ailleurs = plusProche(texte, s.texte, s.debut);
+          if (ailleurs < 0) return false;
+          s.debut = ailleurs;
+          s.fin = ailleurs + s.texte.length;
+        }
+        return true;
+      });
+      leTheme.soulignes.forEach((s, rang) => envelopper(parBloc.get(s.bloc), s, rang));
+    }
+
+    function plusProche(texte, cherche, autour) {
+      if (!cherche) return -1;
+      let meilleur = -1;
+      for (let i = texte.indexOf(cherche); i >= 0; i = texte.indexOf(cherche, i + 1)) {
+        if (meilleur < 0 || Math.abs(i - autour) < Math.abs(meilleur - autour)) meilleur = i;
+      }
+      return meilleur;
+    }
+
+    function envelopper(noeud, s, rang) {
+      const marcheur = document.createTreeWalker(noeud, NodeFilter.SHOW_TEXT);
+      const morceaux = [];
+      let position = 0;
+      for (let t = marcheur.nextNode(); t; t = marcheur.nextNode()) {
+        const a = position, b = position + t.length;
+        position = b;
+        if (b <= s.debut) continue;
+        if (a >= s.fin) break;
+        morceaux.push([t, Math.max(s.debut, a) - a, Math.min(s.fin, b) - a]);
+      }
+      for (const [t, de, a] of morceaux) {
+        let cible = t;
+        if (de > 0) cible = cible.splitText(de);
+        if (a - de < cible.length) cible.splitText(a - de);
+        if (!cible.data.trim() && CONTENANTS.test(cible.parentNode.nodeName)) continue;
+        const marque = el('mark.souligne.souligne--' + s.couleur);
+        marque.dataset.souligne = rang;
+        cible.parentNode.insertBefore(marque, cible);
+        marque.appendChild(cible);
+      }
+    }
+
+    /* La sélection, ramenée bloc par bloc à des positions dans le texte. */
+    function lireSelection() {
+      const sel = window.getSelection();
+      if (!sel || sel.isCollapsed || !sel.rangeCount) return null;
+      const plage = sel.getRangeAt(0);
+      if (!lecture.contains(plage.commonAncestorContainer)) return null;
+      const morceaux = [];
+      for (const noeud of noeuds()) {
+        if (!plage.intersectsNode(noeud)) continue;
+        const texte = noeud.textContent;
+        let debut = noeud.contains(plage.startContainer) ? mesurer(noeud, plage.startContainer, plage.startOffset) : 0;
+        let fin = noeud.contains(plage.endContainer) ? mesurer(noeud, plage.endContainer, plage.endOffset) : texte.length;
+        while (debut < fin && /\s/.test(texte[debut])) debut++;
+        while (fin > debut && /\s/.test(texte[fin - 1])) fin--;
+        if (fin > debut) morceaux.push({ bloc: cleDe(blocDe(noeud)), debut, fin, texte });
+      }
+      return morceaux.length ? morceaux : null;
+    }
+
+    function mesurer(noeud, conteneurFin, decalage) {
+      const r = document.createRange();
+      r.selectNodeContents(noeud);
+      r.setEnd(conteneurFin, decalage);
+      return r.toString().length;
+    }
+
+    /* Poser une couleur (ou rien : effacer) sur un passage. Ce qui se trouvait
+       dessous est découpé : le dernier geste l'emporte. */
+    function appliquer(morceaux, couleur) {
+      for (const m of morceaux) {
+        const reste = [];
+        for (const s of liste()) {
+          if (s.bloc !== m.bloc || s.fin <= m.debut || s.debut >= m.fin) { reste.push(s); continue; }
+          if (s.debut < m.debut) reste.push(Object.assign({}, s, { fin: m.debut, texte: m.texte.slice(s.debut, m.debut) }));
+          if (s.fin > m.fin) reste.push(Object.assign({}, s, { debut: m.fin, texte: m.texte.slice(m.fin, s.fin) }));
+        }
+        if (couleur) reste.push({ bloc: m.bloc, debut: m.debut, fin: m.fin, couleur, texte: m.texte.slice(m.debut, m.fin) });
+        leTheme.soulignes = reste;
+      }
+      Etat.couleurSoulignage = couleur || Etat.couleurSoulignage;
+      dessiner();
+      leTheme.sien = true; // un passage souligné, c'est du travail à sauvegarder
+      Store.themes.enregistrer(leTheme);
+    }
+
+    /* — la palette — */
+
+    const gomme = el('button.palette__gomme', {
+      type: 'button', 'aria-label': 'Effacer le soulignement', title: 'Effacer'
+    }, [icone('gomme')]);
+    const palette = el('div.palette', { role: 'toolbar', 'aria-label': 'Souligner' },
+      COULEURS_SOULIGNE.map(couleur => el('button.palette__couleur.souligne--' + couleur, {
+        type: 'button', 'aria-label': 'Souligner en ' + couleur, title: couleur,
+        'data-couleur': couleur
+      })).concat([gomme]));
+    palette.hidden = true;
+    conteneur.appendChild(palette);
+
+    // Garder la sélection quand on touche la palette.
+    palette.addEventListener('mousedown', ev => ev.preventDefault());
+    palette.addEventListener('click', ev => {
+      const bouton = ev.target.closest('button');
+      if (!bouton) return;
+      const couleur = bouton === gomme ? null : bouton.dataset.couleur;
+      if (touche) {
+        appliquer([Object.assign({}, touche, { texte: textePour(touche.bloc) })], couleur);
+      } else if (enAttente) {
+        appliquer(enAttente, couleur);
+        const sel = window.getSelection();
+        if (sel) sel.removeAllRanges();
+      }
+      fermer();
+    });
+
+    function textePour(cle) {
+      const noeud = noeuds().find(n => cleDe(blocDe(n)) === cle);
+      return noeud ? noeud.textContent : '';
+    }
+
+    function montrer(actuelle, avecGomme) {
+      clearTimeout(minuterie);
+      for (const b of palette.querySelectorAll('.palette__couleur')) {
+        b.classList.toggle('palette__couleur--actuelle', b.dataset.couleur === actuelle);
+      }
+      gomme.hidden = !avecGomme;
+      palette.hidden = false;
+      flottants.hidden = true;
+    }
+
+    function fermer() {
+      clearTimeout(minuterie);
+      enAttente = null;
+      touche = null;
+      palette.hidden = true;
+      flottants.hidden = false;
+    }
+
+    function chevauche(morceaux) {
+      return morceaux.some(m => liste().some(s => s.bloc === m.bloc && s.debut < m.fin && s.fin > m.debut));
+    }
+
+    function surSelection() {
+      if (!document.body.contains(lecture)) {
+        document.removeEventListener('selectionchange', surSelection);
+        return;
+      }
+      const morceaux = lireSelection();
+      if (morceaux) {
+        touche = null;
+        enAttente = morceaux;
+        montrer(Etat.couleurSoulignage, chevauche(morceaux));
+      } else if (enAttente) {
+        // Le doigt qui touche la palette peut vider la sélection juste avant
+        // le clic : on attend un instant avant de la retirer.
+        clearTimeout(minuterie);
+        minuterie = setTimeout(fermer, 400);
+      }
+    }
+    document.addEventListener('selectionchange', surSelection);
+
+    // Toucher un passage souligné : changer sa couleur ou l'effacer.
+    // Dans un lien, le lien garde la priorité ; on passe alors par la sélection.
+    lecture.addEventListener('click', ev => {
+      const marque = ev.target.closest('mark.souligne');
+      const sel = window.getSelection();
+      if (!marque || ev.target.closest('a, button') || (sel && !sel.isCollapsed)) {
+        if (touche) fermer();
+        return;
+      }
+      const s = liste()[Number(marque.dataset.souligne)];
+      if (!s) return;
+      enAttente = null;
+      touche = { bloc: s.bloc, debut: s.debut, fin: s.fin };
+      montrer(s.couleur, true);
+    });
+
+    dessiner();
   }
 
   function rendreBloc(bloc) {

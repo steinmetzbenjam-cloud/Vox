@@ -28,6 +28,14 @@
 
   --surligne:  #fbe8a6;
 
+  /* Soulignements faits en lisant : un trait de feutre sous les mots. */
+  --sl-jaune:  rgba(242, 201, 40, .6);
+  --sl-vert:   rgba(86, 178, 110, .45);
+  --sl-bleu:   rgba(72, 148, 214, .42);
+  --sl-rose:   rgba(226, 98, 140, .4);
+  --sl-orange: rgba(240, 140, 40, .48);
+  --sl-violet: rgba(146, 102, 210, .4);
+
   --serif: ui-serif, "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, "Times New Roman", serif;
   --sans:  -apple-system, BlinkMacSystemFont, system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
@@ -54,6 +62,13 @@
     --ocean-f:   #172b36;  --ocean-e:   #8dbcd4;
 
     --surligne:  #5c4a16;
+
+    --sl-jaune:  rgba(222, 184, 40, .5);
+    --sl-vert:   rgba(90, 190, 120, .45);
+    --sl-bleu:   rgba(90, 160, 230, .48);
+    --sl-rose:   rgba(230, 110, 150, .48);
+    --sl-orange: rgba(240, 145, 50, .5);
+    --sl-violet: rgba(165, 125, 230, .5);
   }
 }
 
@@ -1442,6 +1457,79 @@ body.immersif .lecture__titre { font-size: calc(2rem * var(--echelle)); }
 body.immersif .flottants { display: none; }
 
 @media print { .flottants { display: none; } }
+
+/* ------------------------------------------------ soulignés en lisant --- */
+
+.souligne { --sl: var(--sl-jaune); }
+.souligne--jaune  { --sl: var(--sl-jaune); }
+.souligne--vert   { --sl: var(--sl-vert); }
+.souligne--bleu   { --sl: var(--sl-bleu); }
+.souligne--rose   { --sl: var(--sl-rose); }
+.souligne--orange { --sl: var(--sl-orange); }
+.souligne--violet { --sl: var(--sl-violet); }
+
+mark.souligne {
+  color: inherit;
+  background: linear-gradient(transparent 58%, var(--sl) 58%);
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  cursor: pointer;
+}
+
+.palette {
+  position: fixed;
+  left: 0; right: 0;
+  bottom: calc(20px + env(safe-area-inset-bottom));
+  z-index: 31;
+  width: fit-content;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: calc(100vw - 32px);
+  padding: 9px 12px;
+  border: 1px solid var(--bord);
+  border-radius: 999px;
+  background: var(--carte);
+  box-shadow: 0 4px 18px rgba(0, 0, 0, .2);
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.palette__couleur {
+  flex: none;
+  width: 34px; height: 34px;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 50%;
+  background: var(--sl);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .08);
+  cursor: pointer;
+}
+
+.palette__couleur--actuelle { border-color: var(--texte); }
+
+.palette__gomme {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px; height: 38px;
+  margin-left: 2px;
+  border: 0;
+  border-left: 1px solid var(--bord);
+  border-radius: 0;
+  background: none;
+  color: var(--doux);
+  cursor: pointer;
+}
+
+.palette__gomme .ic { width: 22px; height: 22px; }
+
+@media print {
+  .palette { display: none; }
+  mark.souligne { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
 
 /* Le bloc qu'on venait de lire, repéré à l'arrivée dans l'éditeur. */
 .bloc--vise { animation: bloc-vise 1.6s ease-out; }
