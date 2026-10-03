@@ -30,7 +30,7 @@ de l'appareil**. Elle s'installe sur l'écran d'accueil et fonctionne hors ligne
 
 Dans la lecture, **sélectionnez du doigt** un passage, comme pour le copier :
 une palette de six couleurs apparaît en bas de l'écran. Touchez une couleur, le
-passage est souligné d'un trait de feutre. Une sélection peut couvrir plusieurs
+passage est surligné sur toute la hauteur des mots, comme dans JW Library. Une sélection peut couvrir plusieurs
 blocs.
 
 **Toucher un passage souligné** rouvre la palette : une autre couleur le

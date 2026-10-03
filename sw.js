@@ -6,7 +6,7 @@
 
 // Le numéro de version, affiché en bas des Réglages. À augmenter à chaque
 // mise en ligne : c'est aussi ce qui déclenche la mise à jour des téléphones.
-const VERSION = '11';
+const VERSION = '12';
 const DATE_VERSION = '2026-10-03';
 
 const CACHE = 'vox-v' + VERSION;
