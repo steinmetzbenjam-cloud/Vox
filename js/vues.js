@@ -1315,6 +1315,21 @@ const Vues = (() => {
       const image = el('img.figure__image', { alt: bloc.legende || 'Photo du texte' });
       afficherImage(image, bloc);
       image.addEventListener('click', () => agrandirPhoto(bloc));
+      if (bloc.analyse) {
+        // Ce qu'on a relevé dans les détails de l'image : caché derrière un « i ».
+        const analyse = el('div.figure__analyse', { hidden: true }, [texteEnrichi(bloc.analyse, 'para')]);
+        const info = el('button.figure__info', {
+          type: 'button', 'aria-label': 'Ce que montre l’image', 'aria-expanded': 'false'
+        }, ['i']);
+        info.addEventListener('click', () => {
+          analyse.hidden = !analyse.hidden;
+          info.setAttribute('aria-expanded', String(!analyse.hidden));
+        });
+        figure.appendChild(el('div.figure__cadre', null, [image, info]));
+        if (bloc.legende) figure.appendChild(el('figcaption.figure__legende', { texte: bloc.legende }));
+        figure.appendChild(analyse);
+        return figure;
+      }
       figure.appendChild(image);
       if (bloc.legende) figure.appendChild(el('figcaption.figure__legende', { texte: bloc.legende }));
       return figure;
@@ -2027,6 +2042,10 @@ const Vues = (() => {
           }
           corps.appendChild(zoneTexte(bloc.legende, 'Légende (facultatif)', v => {
             bloc.legende = v;
+            enregistrer();
+          }));
+          corps.appendChild(zoneTexte(bloc.analyse, 'Ce que montrent les détails de l’image (facultatif, derrière le bouton « i »)', v => {
+            bloc.analyse = v;
             enregistrer();
           }));
 

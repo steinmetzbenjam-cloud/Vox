@@ -656,6 +656,47 @@ h1, h2, h3 { font-weight: 600; letter-spacing: -.01em; }
   text-align: center;
 }
 
+/* Le « i » posé sur l'image : il ouvre ce que montrent ses détails. */
+.figure__cadre { position: relative; }
+
+.figure__info {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 2px solid var(--accent);
+  border-radius: 50%;
+  background: var(--carte);
+  color: var(--accent);
+  font-family: Georgia, var(--serif);
+  font-size: 1.1rem;
+  font-style: italic;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, .25);
+}
+
+.figure__info[aria-expanded="true"] { background: var(--accent); color: var(--carte); }
+
+.figure__analyse {
+  margin-top: 10px;
+  padding: 12px 16px;
+  border: 1px solid var(--bord);
+  border-left: 4px solid var(--accent);
+  border-radius: var(--rayon);
+  background: var(--carte);
+}
+
+.figure__analyse[hidden] { display: none; }
+
+@media print {
+  .figure__info { display: none; }
+  .figure__analyse[hidden] { display: block; }
+}
+
 .etiquettes { display: flex; flex-wrap: wrap; gap: 7px; margin: 12px 0 22px; }
 
 .etiquette {

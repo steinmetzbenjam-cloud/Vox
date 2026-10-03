@@ -65,6 +65,12 @@ const Partage = (() => {
     });
   }
 
+  /** L'analyse d'une image (bouton « i ») voyage avec elle, en texte seulement. */
+  function avecAnalyse(image, source) {
+    if (source && typeof source.analyse === 'string' && source.analyse.trim()) image.analyse = source.analyse;
+    return image;
+  }
+
   /** Détache un thème de sa base : plus d'identifiants, photos référencées. */
   function detacher(theme, photos, avecPhotos) {
     const blocs = [];
@@ -72,13 +78,13 @@ const Partage = (() => {
       if (bloc.type === 'image') {
         // Une image en ligne voyage par son adresse, même dans un lien.
         if (!bloc.imageId && MiseEnPage.imageSure(bloc.url) && /^https?:/i.test(bloc.url)) {
-          blocs.push({ type: 'image', url: bloc.url, legende: bloc.legende || '' });
+          blocs.push(avecAnalyse({ type: 'image', url: bloc.url, legende: bloc.legende || '' }, bloc));
           continue;
         }
         if (!avecPhotos || !bloc.imageId) continue; // sans photo, le bloc n'a plus d'objet
         const reference = 'p' + (Object.keys(photos).length + 1);
         photos[reference] = bloc.imageId;
-        blocs.push({ type: 'image', reference, legende: bloc.legende || '' });
+        blocs.push(avecAnalyse({ type: 'image', reference, legende: bloc.legende || '' }, bloc));
         continue;
       }
       if (bloc.type === 'document') {
@@ -265,11 +271,11 @@ const Partage = (() => {
             if (!imageId) {
               const adresse = MiseEnPage.imageSure(bloc.url);
               if (adresse && /^https?:/i.test(adresse)) {
-                blocs.push({ id: Store.identifiant(), type: 'image', url: adresse, legende: bloc.legende || '' });
+                blocs.push(avecAnalyse({ id: Store.identifiant(), type: 'image', url: adresse, legende: bloc.legende || '' }, bloc));
               }
               continue; // photo absente du paquet : on saute le bloc
             }
-            blocs.push({ id: Store.identifiant(), type: 'image', imageId, legende: bloc.legende || '' });
+            blocs.push(avecAnalyse({ id: Store.identifiant(), type: 'image', imageId, legende: bloc.legende || '' }, bloc));
             continue;
           }
           if (bloc.type === 'document') {
