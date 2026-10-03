@@ -26,6 +26,23 @@ de l'appareil**. Elle s'installe sur l'écran d'accueil et fonctionne hors ligne
   « Supprimer » ; le glisser jusqu'au bout le supprime directement. Une
   confirmation est toujours demandée.
 
+### Souligner en lisant
+
+Dans la lecture, **sélectionnez du doigt** un passage, comme pour le copier :
+une palette de six couleurs apparaît en bas de l'écran. Touchez une couleur, le
+passage est souligné d'un trait de feutre. Une sélection peut couvrir plusieurs
+blocs.
+
+**Toucher un passage souligné** rouvre la palette : une autre couleur le
+change, la gomme l'efface. Dans une référence biblique, le lien garde la
+priorité : sélectionnez-la et utilisez la gomme. Souligner par-dessus un
+passage déjà souligné le remplace.
+
+Les soulignements sont gardés dans le thème, avec la sauvegarde, mais ne
+partent pas quand on partage un thème : ils restent personnels. Si le texte
+d'un bloc est modifié ensuite, le passage souligné est retrouvé tant qu'il
+existe encore mot pour mot.
+
 Un thème se compose de blocs qu'on empile dans l'ordre voulu :
 
 | Bloc | À quoi il sert |
@@ -349,6 +366,10 @@ assets/pdfjs/           pdf.js 6.3 (build legacy), licence Apache 2.0
     { id: '…', type: 'question', texte: '« Si Dieu existe… »' },
     { id: '…', type: 'ecriture', reference: 'Jacques 1:13', idee: '…' },
     { id: '…', type: 'image',    imageId: '…', legende: '…' }
+  ],
+  soulignes: [
+    // positions dans le texte affiché du bloc ; `texte` le retrouve s'il a bougé
+    { bloc: '…', debut: 10, fin: 42, couleur: 'jaune', texte: '…' }
   ],
   ordre: 1757601600000,
   creeLe: '…', modifieLe: '…', consulteLe: '…'
