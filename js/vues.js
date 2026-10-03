@@ -40,7 +40,8 @@ const Vues = (() => {
     return el('a.ref' + (variante ? '.ref--' + variante : ''), {
       href: cible,
       texte: Bible.formater(ref),
-      rel: 'noopener'
+      rel: 'noopener',
+      'data-bible': Bible.plage(ref)
     });
   }
 
@@ -869,6 +870,7 @@ const Vues = (() => {
 
       conteneur.appendChild(lecture);
       soulignage(conteneur, lecture, flottants, leTheme);
+      bullesVersets(conteneur, lecture, leTheme);
 
       // Retour de l'éditeur : on revient au bloc qu'on était en train de modifier.
       const rang = rangVise(leTheme);
@@ -1031,11 +1033,11 @@ const Vues = (() => {
 
     /* — la palette — */
 
-    const gomme = el('button.palette__gomme', {
+    const gomme = el('button.surligneur__gomme', {
       type: 'button', 'aria-label': 'Effacer le soulignement', title: 'Effacer'
     }, [icone('gomme')]);
-    const palette = el('div.palette', { role: 'toolbar', 'aria-label': 'Souligner' },
-      COULEURS_SOULIGNE.map(couleur => el('button.palette__couleur.souligne--' + couleur, {
+    const palette = el('div.surligneur', { role: 'toolbar', 'aria-label': 'Souligner' },
+      COULEURS_SOULIGNE.map(couleur => el('button.surligneur__couleur.souligne--' + couleur, {
         type: 'button', 'aria-label': 'Souligner en ' + couleur, title: couleur,
         'data-couleur': couleur
       })).concat([gomme]));
@@ -1065,8 +1067,8 @@ const Vues = (() => {
 
     function montrer(actuelle, avecGomme) {
       clearTimeout(minuterie);
-      for (const b of palette.querySelectorAll('.palette__couleur')) {
-        b.classList.toggle('palette__couleur--actuelle', b.dataset.couleur === actuelle);
+      for (const b of palette.querySelectorAll('.surligneur__couleur')) {
+        b.classList.toggle('surligneur__couleur--actuelle', b.dataset.couleur === actuelle);
       }
       gomme.hidden = !avecGomme;
       palette.hidden = false;
@@ -1123,7 +1125,117 @@ const Vues = (() => {
     dessiner();
   }
 
+  /* — versets en bulle — */
+
+  /**
+   * Un thème peut porter le texte des versets qu'il cite (`versets`, posé par
+   * l'import d'une étude de La Tour de Garde). Toucher une de ces références
+   * ouvre alors une bulle avec le texte, au lieu de quitter Vox ; toucher à
+   * côté la referme. Les autres références ouvrent JW Library, comme avant.
+   */
+  function bullesVersets(conteneur, lecture, leTheme) {
+    const parPlage = new Map();
+    const reperes = []; // { livre, chapitre, premier, verset } pour les références regroupées
+    for (const v of (leTheme.versets || [])) {
+      if (!v || !v.texte) continue;
+      for (const ecrite of [v.reference, v.complete]) {
+        const ref = ecrite && Bible.analyser(ecrite);
+        if (!ref) continue;
+        const code = Bible.plage(ref);
+        if (!parPlage.has(code)) parPlage.set(code, v);
+        reperes.push({ livre: ref.livre, chapitre: ref.chapitre, premier: Math.min(...ref.versets), verset: v });
+      }
+    }
+    if (!parPlage.size) return;
+
+    // « Daniel 6:10, 22 » peut réunir deux citations de l'article : on les montre toutes.
+    function versetsPour(lien) {
+      const exact = parPlage.get(lien.dataset.bible);
+      if (exact) return [exact];
+      const ref = Bible.analyser(lien.textContent);
+      if (!ref) return [];
+      const bas = Math.min(...ref.versets), haut = Math.max(...ref.versets);
+      const dedans = n => (ref.continu ? n >= bas && n <= haut : ref.versets.includes(n));
+      const trouves = [];
+      for (const r of reperes) {
+        if (r.livre === ref.livre && r.chapitre === ref.chapitre && dedans(r.premier) && !trouves.includes(r.verset)) {
+          trouves.push(r.verset);
+        }
+      }
+      return trouves;
+    }
+
+    let bulle = null;
+
+    function fermer() {
+      if (bulle) bulle.remove();
+      bulle = null;
+    }
+
+    function ouvrir(lien, versets) {
+      fermer();
+      const plusieurs = versets.length > 1;
+      bulle = el('div.bulle', { role: 'dialog', 'aria-label': lien.textContent }, [
+        el('div.bulle__tete', null, [
+          el('span.bulle__reference', { texte: lien.textContent }),
+          el('a.bulle__ouvrir', {
+            href: lien.getAttribute('href'), rel: 'noopener',
+            target: /^https?:/i.test(lien.getAttribute('href')) ? '_blank' : null
+          }, ['Ouvrir', icone('externe')])
+        ]),
+        el('div.bulle__texte', null, versets.flatMap(v => [
+          plusieurs ? el('p.bulle__sous', { texte: v.complete || v.reference }) : null
+        ].concat(String(v.texte).split(/\n{2,}/).map(morceau => el('p', { texte: morceau })))))
+      ]);
+      conteneur.appendChild(bulle);
+
+      // Sous la référence, ou au-dessus s'il n'y a pas la place en bas.
+      const cadre = lien.getBoundingClientRect();
+      const largeur = bulle.offsetWidth;
+      const gauche = Math.min(Math.max(16, cadre.left + cadre.width / 2 - largeur / 2),
+        document.documentElement.clientWidth - largeur - 16);
+      const enDessous = window.innerHeight - cadre.bottom > bulle.offsetHeight + 24 || cadre.top < bulle.offsetHeight + 24;
+      bulle.style.left = gauche + window.scrollX + 'px';
+      bulle.style.top = (enDessous ? cadre.bottom + 8 : cadre.top - bulle.offsetHeight - 8) + window.scrollY + 'px';
+      const bas = bulle.getBoundingClientRect().bottom;
+      if (bas > window.innerHeight - 12) window.scrollBy({ top: bas - window.innerHeight + 12, behavior: 'smooth' });
+    }
+
+    lecture.addEventListener('click', ev => {
+      const lien = ev.target.closest('a.ref[data-bible]');
+      if (!lien) return;
+      const versets = versetsPour(lien);
+      if (!versets.length) return;
+      ev.preventDefault();
+      ouvrir(lien, versets);
+    });
+
+    function aCote(ev) {
+      if (!document.body.contains(lecture)) {
+        document.removeEventListener('pointerdown', aCote, true);
+        document.removeEventListener('keydown', echap);
+        return;
+      }
+      if (bulle && !bulle.contains(ev.target)) fermer();
+    }
+    function echap(ev) { if (ev.key === 'Escape') fermer(); }
+    document.addEventListener('pointerdown', aCote, true);
+    document.addEventListener('keydown', echap);
+  }
+
   function rendreBloc(bloc) {
+    // Un paragraphe d'étude (La Tour de Garde) : sa question, son numéro, ses notes.
+    if (bloc.type === 'paragraphe') {
+      const boite = el('section.etude');
+      if (bloc.question) boite.appendChild(texteEnrichi(bloc.question, 'etude__question'));
+      const corps = el('div.etude__corps');
+      if (bloc.numero) corps.appendChild(el('span.etude__numero', { texte: bloc.numero }));
+      corps.appendChild(texteEnrichi(bloc.texte, 'etude__texte'));
+      boite.appendChild(corps);
+      if (bloc.note) boite.appendChild(texteEnrichi(bloc.note, 'etude__note'));
+      return boite;
+    }
+
     if (bloc.type === 'question') {
       const boite = el('blockquote.question');
       boite.appendChild(texteEnrichi(bloc.texte, 'question__texte'));
@@ -1450,7 +1562,8 @@ const Vues = (() => {
     { type: 'image',    libelle: 'Photo',     glyphe: 'photo' },
     { type: 'document', libelle: 'Document',  glyphe: 'fichier' },
     { type: 'media',    libelle: 'Vidéo, lien', glyphe: 'media' },
-    { type: 'note',     libelle: 'Aparté',    glyphe: 'note' }
+    { type: 'note',     libelle: 'Aparté',    glyphe: 'note' },
+    { type: 'paragraphe', libelle: 'Paragraphe d’étude', glyphe: 'liste' }
   ];
 
   /* — barre de mise en forme d'un champ de texte — */
@@ -2019,6 +2132,33 @@ const Vues = (() => {
             enregistrer();
           }));
 
+        } else if (bloc.type === 'paragraphe') {
+          const champNumero = el('input.champ.champ--numero', {
+            type: 'text', inputmode: 'numeric', placeholder: 'N°', 'aria-label': 'Numéro du paragraphe'
+          });
+          champNumero.value = bloc.numero || '';
+          champNumero.addEventListener('input', () => {
+            bloc.numero = champNumero.value.trim();
+            enregistrer();
+          });
+          corps.appendChild(champNumero);
+          corps.appendChild(zoneTexte(bloc.question, 'La question imprimée (facultatif)', v => {
+            bloc.question = v;
+            enregistrer();
+          }));
+          const zone = zoneTexte(bloc.texte, 'Le texte du paragraphe', v => {
+            bloc.texte = v;
+            enregistrer();
+          });
+          const outils = outilsTexte(zone);
+          corps.appendChild(outils.barre);
+          corps.appendChild(zone);
+          corps.appendChild(outils.apercu);
+          corps.appendChild(zoneTexte(bloc.note, 'Note en bas de page (facultatif)', v => {
+            bloc.note = v;
+            enregistrer();
+          }));
+
         } else {
           const reperes = {
             question: 'La question posée — à l’auditoire, ou à soi-même',
@@ -2138,7 +2278,7 @@ const Vues = (() => {
         const morceaux = [t.titre, t.soustitre || ''].concat(t.situations || []);
         for (const bloc of (t.blocs || [])) {
           morceaux.push(bloc.texte || '', bloc.reference || '', bloc.idee || '', bloc.legende || '',
-            bloc.titre || '', bloc.nom || '');
+            bloc.titre || '', bloc.nom || '', bloc.question || '', bloc.note || '');
         }
         return { theme: t, plat: Bible.normaliser(morceaux.join(' ')) };
       });

@@ -124,6 +124,19 @@ const Bible = (() => {
 
   const FENETRE_LIVRE = 26; // caractères examinés en amont pour trouver le nom
 
+  // Abdias, Philémon, 2 Jean, 3 Jean, Jude : un seul chapitre, qu'on ne
+  // nomme pas. « 3 Jean 3, 4 » désigne les versets 3 et 4 du chapitre 1.
+  // Les abréviations trop courtes (« ab », « jd », « 3 j ») sont écartées :
+  // elles se confondraient avec du texte ordinaire.
+  const UN_CHAPITRE = new Set([31, 57, 63, 64, 65]);
+  const RE_UN_CHAPITRE = new RegExp(
+    '(?:^|[^a-z0-9])(' + GRAPHIES
+      .filter(g => UN_CHAPITRE.has(g.n) && g.cle.replace(/[\s\d]/g, '').length >= 2 && g.cle.length >= 3)
+      .map(g => echapper(g.cle)).join('|') +
+    ')\\s*\\.?\\s+(\\d{1,3})(?!\\d)((?:\\s*[-–—]\\s*\\d{1,3})?(?:\\s*,\\s*\\d{1,3})*)(?!\\d)(?!\\s*[:.]\\s*\\d)',
+    'g'
+  );
+
   /**
    * Repère toutes les références contenues dans `texte`.
    * Renvoie des objets { livre, chapitre, versets[], debut, fin, brut }
@@ -166,7 +179,28 @@ const Bible = (() => {
         brut: texte.slice(debutLivre, debutCV + m[0].length)
       });
     }
-    return trouvees;
+
+    RE_UN_CHAPITRE.lastIndex = 0;
+    while ((m = RE_UN_CHAPITRE.exec(plat)) !== null) {
+      const debut = m.index + m[0].indexOf(m[1]);
+      const fin = m.index + m[0].length;
+      if (trouvees.some(t => t.debut < fin && t.fin > debut)) continue;
+      const versets = [parseInt(m[2], 10)];
+      const suite = m[3] || '';
+      const portee = suite.match(/[-–—]\s*(\d{1,3})/);
+      if (portee) versets.push(parseInt(portee[1], 10));
+      for (const sup of suite.matchAll(/,\s*(\d{1,3})/g)) versets.push(parseInt(sup[1], 10));
+      trouvees.push({
+        livre: NUMERO_PAR_GRAPHIE.get(m[1]),
+        chapitre: 1,
+        versets,
+        continu: !!portee,
+        debut,
+        fin,
+        brut: texte.slice(debut, fin)
+      });
+    }
+    return trouvees.sort((a, b) => a.debut - b.debut);
   }
 
   const deuxChiffres = n => String(n).padStart(3, '0');
@@ -203,6 +237,7 @@ const Bible = (() => {
     if (v.length === 1) suffixe = String(v[0]);
     else if (ref.continu) suffixe = v[0] + '-' + v[v.length - 1];
     else suffixe = v.join(', ');
+    if (UN_CHAPITRE.has(ref.livre) && ref.chapitre === 1) return nom + ' ' + suffixe;
     return nom + ' ' + ref.chapitre + ':' + suffixe;
   }
 
@@ -217,5 +252,5 @@ const Bible = (() => {
     return l ? l.nom : '';
   }
 
-  return { LIVRES, reperer, analyser, formater, lienApplication, lienWeb, nomLivre, normaliser };
+  return { LIVRES, reperer, analyser, formater, plage, lienApplication, lienWeb, nomLivre, normaliser };
 })();
