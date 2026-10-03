@@ -943,6 +943,7 @@ const Vues = (() => {
         const noeud = parBloc.get(s.bloc);
         if (!noeud) return false;
         const texte = noeud.textContent;
+        if (typeof s.debut !== 'number' && !placer(noeud, s)) return false;
         if (texte.slice(s.debut, s.fin) !== s.texte) {
           const ailleurs = plusProche(texte, s.texte, s.debut);
           if (ailleurs < 0) return false;
@@ -952,6 +953,20 @@ const Vues = (() => {
         return true;
       });
       leTheme.soulignes.forEach((s, rang) => envelopper(parBloc.get(s.bloc), s, rang));
+    }
+
+    /* Un passage reçu dans un paquet n'a pas encore de place : on le cherche
+       d'abord dans le texte du paragraphe, pas dans sa question. */
+    function placer(noeud, s) {
+      const zones = [...noeud.querySelectorAll('.etude__texte')];
+      for (const zone of zones.length ? zones : [noeud]) {
+        const dedans = zone.textContent.indexOf(s.texte);
+        if (dedans < 0) continue;
+        s.debut = (zone === noeud ? 0 : mesurer(noeud, zone, 0)) + dedans;
+        s.fin = s.debut + s.texte.length;
+        return true;
+      }
+      return false;
     }
 
     function plusProche(texte, cherche, autour) {

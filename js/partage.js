@@ -112,6 +112,24 @@ const Partage = (() => {
     };
   }
 
+  /**
+   * Des passages à souligner, posés par l'auteur du paquet sur un bloc :
+   * [{ texte, couleur }]. Ils deviennent des soulignements ordinaires,
+   * modifiables du doigt ; leur place exacte se trouve à l'affichage.
+   */
+  const COULEURS_SOULIGNE = ['jaune', 'vert', 'bleu', 'rose', 'orange', 'violet'];
+
+  function soulignesSurs(liste, blocId) {
+    if (!Array.isArray(liste)) return [];
+    return liste
+      .filter(s => s && typeof s.texte === 'string' && s.texte.trim())
+      .map(s => ({
+        bloc: blocId,
+        couleur: COULEURS_SOULIGNE.includes(s.couleur) ? s.couleur : 'jaune',
+        texte: s.texte.trim()
+      }));
+  }
+
   /** Le texte des versets cités : des chaînes, rien d'autre. */
   function versetsSurs(liste) {
     if (!Array.isArray(liste)) return [];
@@ -265,6 +283,7 @@ const Partage = (() => {
 
       return Promise.all(paquet.themes.map((theme, rang) => {
         const blocs = [];
+        const soulignes = [];
         for (const bloc of theme.blocs) {
           if (bloc.type === 'image') {
             const imageId = parReference.get(bloc.reference);
@@ -288,7 +307,10 @@ const Partage = (() => {
             });
             continue;
           }
-          blocs.push(Object.assign({ id: Store.identifiant() }, bloc));
+          const copie = Object.assign({ id: Store.identifiant() }, bloc);
+          delete copie.soulignes;
+          soulignes.push(...soulignesSurs(bloc.soulignes, copie.id));
+          blocs.push(copie);
         }
         return Store.themes.enregistrer({
           domaineId,
@@ -298,6 +320,7 @@ const Partage = (() => {
           situations: (theme.situations || []).slice(),
           blocs,
           versets: versetsSurs(theme.versets),
+          soulignes,
           ordre: depart + rang
         });
       }));
